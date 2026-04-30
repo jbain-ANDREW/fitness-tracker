@@ -35,7 +35,7 @@ function _ts() {
 // ── One-time init ─────────────────────────────────────────────────────────────
 
 function initFitness() {
-  const SPREADSHEET_ID = 'YOUR_SPREADSHEET_ID_HERE'; // paste your sheet ID before running
+  const SPREADSHEET_ID = '11pxgECbfHoNQjZ8nijB6101XWsfNSa53eReusdBz4rE';
 
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   PropertiesService.getScriptProperties().setProperty('SPREADSHEET_ID', SPREADSHEET_ID);
