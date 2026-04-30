@@ -1,558 +1,648 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Fitness Tracker</title>
-<style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f2f2f7; color: #1c1c1e; min-height: 100vh; }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fitness Tracker</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #f2f2f7;
+      padding: 16px;
+    }
+    h1 { font-size: 22px; margin-bottom: 12px; color: #1c1c1e; }
 
-.tab-bar { display: flex; background: #fff; border-bottom: 1px solid #e5e5ea; position: sticky; top: 0; z-index: 100; }
-.tab-btn { flex: 1; padding: 14px 0 10px; border: none; background: none; font-size: 13px; color: #8e8e93; cursor: pointer; border-bottom: 3px solid transparent; }
-.tab-btn.active { color: #007aff; border-bottom-color: #007aff; font-weight: 600; }
+    /* Pill tab bar */
+    .tabs {
+      display: flex;
+      background: #e5e5ea;
+      border-radius: 10px;
+      padding: 3px;
+      margin-bottom: 16px;
+      max-width: 480px;
+    }
+    .tab {
+      flex: 1;
+      text-align: center;
+      padding: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      color: #6e6e73;
+      transition: all 0.15s;
+    }
+    .tab.active { background: white; color: #1c1c1e; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
 
-.tab-pane { display: none; padding: 16px; max-width: 600px; margin: 0 auto; }
-.tab-pane.active { display: block; }
+    /* Panes */
+    .pane { display: none; max-width: 480px; }
+    .pane.active { display: block; }
 
-.card { background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-.card-title { font-size: 13px; font-weight: 600; color: #8e8e93; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 12px; }
+    /* Cards */
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
 
-.input-row { display: flex; gap: 8px; align-items: flex-end; }
-input[type=number], input[type=text], select {
-  border: 1px solid #e5e5ea; border-radius: 8px; padding: 10px 12px;
-  font-size: 15px; width: 100%; background: #f9f9f9; color: #1c1c1e;
-}
-input:focus, select:focus { outline: none; border-color: #007aff; background: #fff; }
+    /* Labels */
+    label, .lbl {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #6e6e73;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
 
-.btn { padding: 10px 20px; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: opacity .15s; white-space: nowrap; }
-.btn:active { opacity: .7; }
-.btn-primary { background: #007aff; color: #fff; }
-.btn-green   { background: #34c759; color: #fff; }
-.btn-danger  { background: #ff3b30; color: #fff; }
-.btn-secondary { background: #e5e5ea; color: #3a3a3c; }
-.btn-sm { padding: 6px 12px; font-size: 13px; border-radius: 6px; }
+    /* Inputs */
+    select, input[type=text], input[type=number], textarea {
+      width: 100%;
+      font-size: 17px;
+      padding: 10px 12px;
+      border: 1px solid #d1d1d6;
+      border-radius: 8px;
+      background: #fafafa;
+      color: #1c1c1e;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+    textarea { font-size: 15px; resize: vertical; min-height: 72px; }
+    select:focus, input:focus, textarea:focus {
+      outline: none;
+      border-color: #007aff;
+      background: #fff;
+    }
 
-.stat-big   { font-size: 38px; font-weight: 300; color: #007aff; line-height: 1; }
-.stat-label { font-size: 13px; color: #8e8e93; margin-top: 4px; }
+    /* Buttons */
+    button.primary {
+      width: 100%;
+      padding: 15px;
+      font-size: 17px;
+      font-weight: 600;
+      background: #007aff;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      margin-top: 4px;
+    }
+    button.primary:disabled { background: #b0c4de; cursor: default; }
+    button.secondary {
+      width: 100%;
+      padding: 15px;
+      font-size: 17px;
+      font-weight: 600;
+      background: #e5e5ea;
+      color: #1c1c1e;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      margin-top: 4px;
+    }
+    button.small {
+      padding: 6px 14px;
+      font-size: 14px;
+      font-weight: 600;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button.small.danger { background: #ff3b30; color: white; }
+    button.small.blue   { background: #007aff; color: white; }
+    button.small.grey   { background: #e5e5ea; color: #1c1c1e; }
 
-.entry-list { list-style: none; }
-.entry-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f2f2f7; font-size: 14px; }
-.entry-item:last-child { border-bottom: none; }
-.entry-meta { color: #8e8e93; font-size: 12px; }
+    /* Stat display */
+    .stat-big   { font-size: 38px; font-weight: 300; color: #007aff; line-height: 1; }
+    .stat-sub   { font-size: 13px; color: #6e6e73; margin-top: 4px; }
 
-.act-row { display: flex; justify-content: space-between; align-items: center; padding: 11px 0; border-bottom: 1px solid #f2f2f7; gap: 12px; }
-.act-row:last-child { border-bottom: none; }
-.act-name { font-size: 15px; font-weight: 500; }
-.act-goal { font-size: 12px; color: #8e8e93; margin-top: 2px; }
-.act-input { width: 80px !important; text-align: center; }
+    /* Row layouts */
+    .row { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 12px; }
+    .row > * { flex: 1; }
+    .row > button { flex: 0 0 auto; }
+    .col { display: flex; flex-direction: column; gap: 4px; }
 
-.toggle { position: relative; display: inline-block; width: 50px; height: 28px; flex-shrink: 0; }
-.toggle input { opacity: 0; width: 0; height: 0; }
-.toggle-slider { position: absolute; cursor: pointer; inset: 0; background: #e5e5ea; border-radius: 28px; transition: .3s; }
-.toggle-slider:before { content: ''; position: absolute; width: 24px; height: 24px; left: 2px; bottom: 2px; background: #fff; border-radius: 50%; transition: .3s; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
-input:checked + .toggle-slider { background: #34c759; }
-input:checked + .toggle-slider:before { transform: translateX(22px); }
+    /* Entry list */
+    .entry-list { list-style: none; margin-top: 8px; }
+    .entry-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 9px 0;
+      border-bottom: 1px solid #f2f2f7;
+      font-size: 15px;
+    }
+    .entry-item:last-child { border-bottom: none; }
+    .entry-sub { font-size: 13px; color: #6e6e73; margin-top: 2px; }
 
-.cal-badge { background: #ff9500; color: #fff; border-radius: 6px; padding: 2px 8px; font-size: 12px; font-weight: 600; white-space: nowrap; }
-.total-row { display: flex; justify-content: space-between; align-items: center; padding-top: 10px; margin-top: 4px; border-top: 1px solid #f2f2f7; font-weight: 600; font-size: 14px; }
+    /* Cal badge */
+    .cal-badge {
+      background: #ff9500;
+      color: white;
+      border-radius: 6px;
+      padding: 2px 9px;
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 10px;
+      margin-top: 4px;
+      border-top: 1px solid #e5e5ea;
+      font-weight: 600;
+      font-size: 15px;
+    }
 
-.config-row { display: grid; gap: 8px; align-items: center; padding: 9px 0; border-bottom: 1px solid #f2f2f7; font-size: 14px; }
-.config-row:last-child { border-bottom: none; }
-.foods-row { grid-template-columns: 2fr 1fr 1.5fr 1fr auto; }
-.acts-row  { grid-template-columns: 2fr 1fr 1fr 1fr auto; }
-.config-header span { font-weight: 600; font-size: 12px; color: #8e8e93; }
+    /* Activity rows */
+    .act-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 11px 0;
+      border-bottom: 1px solid #f2f2f7;
+    }
+    .act-row:last-child { border-bottom: none; }
+    .act-name { font-size: 16px; font-weight: 500; color: #1c1c1e; }
+    .act-goal { font-size: 13px; color: #6e6e73; margin-top: 2px; }
+    .act-input-wrap { flex: 0 0 90px; }
+    .act-input-wrap input { font-size: 17px; text-align: center; }
 
-.date-nav { display: flex; align-items: center; justify-content: center; gap: 20px; margin-bottom: 16px; }
-.date-nav .date-label { font-size: 17px; font-weight: 600; min-width: 110px; text-align: center; }
-.date-nav button { background: none; border: none; font-size: 26px; cursor: pointer; color: #007aff; line-height: 1; padding: 0 4px; }
-.date-nav button:disabled { color: #c7c7cc; cursor: default; }
+    /* Toggle */
+    .toggle { position: relative; display: inline-block; width: 51px; height: 31px; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute; cursor: pointer; inset: 0;
+      background: #e5e5ea; border-radius: 31px; transition: .3s;
+    }
+    .toggle-slider:before {
+      content: ''; position: absolute;
+      width: 27px; height: 27px; left: 2px; bottom: 2px;
+      background: white; border-radius: 50%; transition: .3s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+    input:checked + .toggle-slider { background: #34c759; }
+    input:checked + .toggle-slider:before { transform: translateX(20px); }
 
-.spinner { text-align: center; padding: 32px; color: #8e8e93; }
-.empty-state { text-align: center; color: #8e8e93; font-size: 14px; padding: 12px 0; }
+    /* Date nav */
+    .date-nav {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .date-nav .date-label { font-size: 17px; font-weight: 600; color: #1c1c1e; }
+    .date-nav button {
+      background: none; border: none; font-size: 28px;
+      color: #007aff; cursor: pointer; padding: 0 8px; line-height: 1;
+    }
+    .date-nav button:disabled { color: #c7c7cc; cursor: default; }
 
-.toast { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.8); color: #fff; padding: 10px 22px; border-radius: 20px; font-size: 14px; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 999; white-space: nowrap; }
-.toast.show { opacity: 1; }
+    /* Config table */
+    .cfg-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 0;
+      border-bottom: 1px solid #f2f2f7;
+      font-size: 15px;
+    }
+    .cfg-row:last-child { border-bottom: none; }
+    .cfg-name { flex: 2; font-weight: 500; color: #1c1c1e; }
+    .cfg-meta { flex: 1; font-size: 13px; color: #6e6e73; }
+    .cfg-cal  { flex: 0 0 70px; font-size: 13px; color: #6e6e73; text-align: right; }
 
-.form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
-.add-section { margin-top: 14px; border-top: 1px solid #f2f2f7; padding-top: 14px; }
-.add-section-title { font-size: 13px; font-weight: 600; color: #8e8e93; margin-bottom: 8px; }
-</style>
+    .section-divider {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #e5e5ea;
+    }
+    .section-title {
+      font-size: 13px; font-weight: 600; color: #6e6e73;
+      text-transform: uppercase; letter-spacing: 0.3px;
+      margin-bottom: 12px;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .form-grid .col > input { margin-top: 0; }
+
+    /* Status / empty */
+    .empty { text-align: center; color: #8e8e93; font-size: 15px; padding: 16px 0; }
+    .status { text-align: center; margin-top: 10px; font-size: 15px; color: #3a3a3c; min-height: 20px; }
+    .status.success { color: #34c759; }
+    .status.error   { color: #ff3b30; }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,.8); color: white;
+      padding: 10px 22px; border-radius: 20px;
+      font-size: 15px; opacity: 0; transition: opacity .25s;
+      pointer-events: none; z-index: 999; white-space: nowrap;
+    }
+    .toast.show { opacity: 1; }
+  </style>
 </head>
 <body>
 
-<div class="tab-bar">
-  <button class="tab-btn active" onclick="showTab('log', this)">📋 Log</button>
-  <button class="tab-btn" onclick="showTab('history', this)">📅 History</button>
-  <button class="tab-btn" onclick="showTab('configure', this)">⚙️ Configure</button>
+<h1>Fitness Tracker</h1>
+
+<div class="tabs">
+  <div class="tab active" onclick="showTab('log', this)">📋 Log</div>
+  <div class="tab" onclick="showTab('history', this)">📅 History</div>
+  <div class="tab" onclick="showTab('configure', this)">⚙️ Configure</div>
 </div>
 
 <!-- ══ LOG ══════════════════════════════════════════════════════════════════ -->
-<div id="tab-log" class="tab-pane active">
-  <div style="text-align:center;padding:6px 0 2px;font-size:13px;color:#8e8e93;" id="log-date-header"></div>
+<div id="pane-log" class="pane active">
 
   <!-- Weight -->
   <div class="card">
-    <div class="card-title">⚖️ Weight</div>
     <div style="text-align:center;margin-bottom:14px;">
       <div class="stat-big" id="weight-avg">—</div>
-      <div class="stat-label" id="weight-avg-label">no entries today</div>
+      <div class="stat-sub" id="weight-avg-label">no entries today</div>
     </div>
-    <div class="input-row">
-      <input type="number" id="weight-input" placeholder="lbs" step="0.1" min="50" max="500"
-             style="font-size:22px;text-align:center;" onkeydown="if(event.key==='Enter')logWeight()">
-      <button class="btn btn-primary" onclick="logWeight()">Log</button>
+    <label>Weight (lbs)</label>
+    <div class="row">
+      <input type="number" id="weight-input" placeholder="e.g. 185.4" step="0.1" min="50" max="500"
+             onkeydown="if(event.key==='Enter')logWeight()">
+      <button class="small blue" onclick="logWeight()" style="padding:10px 18px;font-size:16px;">Log</button>
     </div>
-    <ul class="entry-list" id="weight-entries" style="margin-top:10px;"></ul>
+    <ul class="entry-list" id="weight-entries"></ul>
   </div>
 
   <!-- Food -->
   <div class="card">
-    <div class="card-title">🍎 Food</div>
-    <select id="food-select" onchange="updateCalPreview()" style="margin-bottom:10px;"></select>
-    <div class="input-row" style="margin-bottom:10px;">
-      <div style="flex:1;">
-        <div style="font-size:12px;color:#8e8e93;margin-bottom:4px;">Servings</div>
+    <label>Food</label>
+    <select id="food-select" onchange="updateCalPreview()" style="margin-bottom:12px;"></select>
+    <div class="row" style="align-items:center;">
+      <div class="col">
+        <label style="margin-bottom:4px;">Servings</label>
         <input type="number" id="food-servings" value="1" min="0.25" step="0.25"
                oninput="updateCalPreview()" onkeydown="if(event.key==='Enter')logFood()">
       </div>
-      <div style="flex:1;text-align:center;">
-        <div style="font-size:12px;color:#8e8e93;margin-bottom:4px;">Calories</div>
-        <div style="font-size:24px;font-weight:600;color:#ff9500;line-height:1.6;" id="cal-preview">—</div>
+      <div style="text-align:center;flex:1;">
+        <div class="lbl">Calories</div>
+        <div style="font-size:26px;font-weight:600;color:#ff9500;" id="cal-preview">—</div>
       </div>
-      <button class="btn btn-primary" onclick="logFood()" style="margin-bottom:1px;">Log</button>
+      <button class="small blue" onclick="logFood()" style="padding:10px 18px;font-size:16px;">Log</button>
     </div>
     <div class="total-row" id="food-total-row" style="display:none;">
       <span>Today's total</span>
       <span class="cal-badge" id="food-total-cal"></span>
     </div>
-    <ul class="entry-list" id="food-entries" style="margin-top:6px;"></ul>
+    <ul class="entry-list" id="food-entries"></ul>
   </div>
 
   <!-- Activities -->
   <div class="card">
-    <div class="card-title">🏃 Activities</div>
+    <div class="lbl" style="margin-bottom:12px;">Activities</div>
     <div id="activities-list"></div>
-    <button class="btn btn-green" onclick="saveActivities()" style="width:100%;margin-top:14px;">Save Activities</button>
+    <button class="primary" onclick="saveActivities()" style="margin-top:14px;">Save Activities</button>
   </div>
+
 </div>
 
 <!-- ══ HISTORY ══════════════════════════════════════════════════════════════ -->
-<div id="tab-history" class="tab-pane">
+<div id="pane-history" class="pane">
   <div class="date-nav">
-    <button onclick="historyNav(-1)" title="Previous day">‹</button>
+    <button onclick="historyNav(-1)">‹</button>
     <span class="date-label" id="hist-date"></span>
-    <button id="hist-fwd-btn" onclick="historyNav(1)" title="Next day">›</button>
+    <button id="hist-fwd-btn" onclick="historyNav(1)">›</button>
   </div>
-  <div id="hist-content"><div class="spinner">Loading…</div></div>
+  <div id="hist-content"><div class="empty">Loading…</div></div>
 </div>
 
 <!-- ══ CONFIGURE ════════════════════════════════════════════════════════════ -->
-<div id="tab-configure" class="tab-pane">
+<div id="pane-configure" class="pane">
 
   <!-- Foods -->
   <div class="card">
-    <div class="card-title">🍎 Foods</div>
-    <div class="config-row foods-row config-header">
-      <span>Name</span><span>Serving</span><span>Size</span><span>Cal/svg</span><span></span>
-    </div>
+    <div class="lbl">Foods</div>
     <div id="foods-config-list"></div>
-    <div class="add-section">
-      <div class="add-section-title">ADD FOOD</div>
-      <div class="form-grid-2">
-        <input type="text" id="new-food-name" placeholder="Food name">
-        <input type="text" id="new-food-serving-name" placeholder="Serving name (e.g. cup)">
+
+    <div class="section-divider">
+      <div class="section-title">Add Food</div>
+      <div class="form-grid">
+        <div class="col"><label>Name</label><input type="text" id="new-food-name" placeholder="e.g. Oatmeal"></div>
+        <div class="col"><label>Serving name</label><input type="text" id="new-food-serving-name" placeholder="e.g. cup"></div>
       </div>
-      <div class="form-grid-2">
-        <input type="text" id="new-food-serving-size" placeholder="Size desc (e.g. 1 cup cooked)">
-        <input type="number" id="new-food-calories" placeholder="Calories / serving">
+      <div class="form-grid">
+        <div class="col"><label>Size description</label><input type="text" id="new-food-serving-size" placeholder="e.g. 1 cup cooked"></div>
+        <div class="col"><label>Calories / serving</label><input type="number" id="new-food-calories" placeholder="e.g. 150"></div>
       </div>
-      <button class="btn btn-primary" onclick="addFood()" style="width:100%;">Add Food</button>
+      <button class="primary" onclick="addFood()">Add Food</button>
     </div>
   </div>
 
   <!-- Activities -->
   <div class="card">
-    <div class="card-title">🏃 Activities</div>
-    <div class="config-row acts-row config-header">
-      <span>Name</span><span>Type</span><span>Unit</span><span>Goal</span><span></span>
-    </div>
+    <div class="lbl">Activities</div>
     <div id="acts-config-list"></div>
-    <div class="add-section">
-      <div class="add-section-title">ADD ACTIVITY</div>
-      <div class="form-grid-2">
-        <input type="text" id="new-act-name" placeholder="Activity name">
-        <select id="new-act-type">
-          <option value="checkbox">Checkbox (yes/no)</option>
-          <option value="number">Number</option>
-        </select>
+
+    <div class="section-divider">
+      <div class="section-title">Add Activity</div>
+      <div class="form-grid">
+        <div class="col"><label>Name</label><input type="text" id="new-act-name" placeholder="e.g. Exercise"></div>
+        <div class="col"><label>Type</label>
+          <select id="new-act-type">
+            <option value="checkbox">Checkbox (yes/no)</option>
+            <option value="number">Number</option>
+          </select>
+        </div>
       </div>
-      <div class="form-grid-2">
-        <input type="text" id="new-act-unit" placeholder="Unit (e.g. minutes, steps)">
-        <input type="text" id="new-act-goal" placeholder="Goal (e.g. 30)">
+      <div class="form-grid">
+        <div class="col"><label>Unit</label><input type="text" id="new-act-unit" placeholder="e.g. minutes"></div>
+        <div class="col"><label>Goal</label><input type="text" id="new-act-goal" placeholder="e.g. 30"></div>
       </div>
-      <button class="btn btn-primary" onclick="addActivity()" style="width:100%;">Add Activity</button>
+      <button class="primary" onclick="addActivity()">Add Activity</button>
     </div>
   </div>
+
 </div>
 
 <div class="toast" id="toast"></div>
 
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
-const state = {
-  foods_config:      [],
-  activities_config: [],
-  today_weight:      { entries: [], average: null },
-  today_food:        { entries: [], total_calories: 0 },
-  today_activities:  {},
-  hist_date:         new Date().toISOString().substring(0, 10)
+const S = {
+  foods:      [],
+  activities: [],
+  wt:         { entries: [], average: null },
+  food:       { entries: [], total_calories: 0 },
+  acts:       {},
+  histDate:   new Date().toISOString().slice(0, 10)
 };
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
-function showTab(name, btn) {
-  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('tab-' + name).classList.add('active');
-  btn.classList.add('active');
-  if (name === 'history')   loadHistoryDate(state.hist_date);
-  if (name === 'configure') renderConfigAll();
+function showTab(name, el) {
+  document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('pane-' + name).classList.add('active');
+  el.classList.add('active');
+  if (name === 'history')   loadHistoryDate(S.histDate);
+  if (name === 'configure') renderConfig();
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
-let _toastTimer;
+let _tt;
 function toast(msg) {
   const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.classList.add('show');
-  clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(_tt); _tt = setTimeout(() => el.classList.remove('show'), 2200);
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('log-date-header').textContent =
-    new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-  loadTodaySummary();
-});
-
-function loadTodaySummary() {
+window.addEventListener('load', () => {
   google.script.run
-    .withSuccessHandler(data => {
-      state.foods_config      = data.foods_config      || [];
-      state.activities_config = data.activities_config || [];
-      state.today_weight      = data.weight || { entries: [], average: null };
-      state.today_food        = data.food   || { entries: [], total_calories: 0 };
-      state.today_activities  = data.activities || {};
-      renderWeightSection();
-      renderFoodSection();
-      renderActivitiesSection();
+    .withSuccessHandler(d => {
+      S.foods      = d.foods_config      || [];
+      S.activities = d.activities_config || [];
+      S.wt         = d.weight  || { entries: [], average: null };
+      S.food       = d.food    || { entries: [], total_calories: 0 };
+      S.acts       = d.activities || {};
+      renderWeight(); renderFood(); renderActivities();
     })
     .withFailureHandler(err => toast('Load error: ' + err.message))
     .getTodaySummary();
-}
+});
 
 // ── Weight ────────────────────────────────────────────────────────────────────
-function renderWeightSection() {
-  const w = state.today_weight;
+function renderWeight() {
+  const w = S.wt;
   document.getElementById('weight-avg').textContent =
     w.average ? w.average + ' lbs' : '—';
   document.getElementById('weight-avg-label').textContent =
-    w.entries.length === 0 ? 'no entries today' :
+    !w.entries.length ? 'no entries today' :
     w.entries.length === 1 ? '1 entry today' :
     w.entries.length + ' entries — average';
-  const ul = document.getElementById('weight-entries');
-  ul.innerHTML = w.entries.map(e => {
-    const time = String(e.time).length > 10 ? String(e.time).substring(11, 16) : '';
-    return `<li class="entry-item"><span>${e.weight} lbs</span><span class="entry-meta">${time}</span></li>`;
+  document.getElementById('weight-entries').innerHTML = w.entries.map(e => {
+    const t = String(e.time).length > 10 ? String(e.time).slice(11, 16) : '';
+    return `<li class="entry-item">
+      <span>${e.weight} lbs</span>
+      <span style="font-size:13px;color:#6e6e73;">${t}</span>
+    </li>`;
   }).join('');
 }
 
 function logWeight() {
-  const val = parseFloat(document.getElementById('weight-input').value);
-  if (!val || val < 50 || val > 500) { toast('Enter a valid weight (50–500 lbs)'); return; }
+  const v = parseFloat(document.getElementById('weight-input').value);
+  if (!v || v < 50 || v > 500) { toast('Enter a valid weight (50–500 lbs)'); return; }
   google.script.run
-    .withSuccessHandler(data => {
-      state.today_weight = data;
-      renderWeightSection();
-      document.getElementById('weight-input').value = '';
-      toast('Weight logged ✓');
-    })
-    .withFailureHandler(err => toast('Error: ' + err.message))
-    .logWeight(val);
+    .withSuccessHandler(d => { S.wt = d; renderWeight(); document.getElementById('weight-input').value = ''; toast('Weight logged ✓'); })
+    .withFailureHandler(e => toast('Error: ' + e.message))
+    .logWeight(v);
 }
 
 // ── Food ──────────────────────────────────────────────────────────────────────
-function renderFoodSection() {
-  const sel  = document.getElementById('food-select');
-  const prev = sel.value;
-  if (state.foods_config.length === 0) {
-    sel.innerHTML = '<option value="">— add foods in Configure —</option>';
-  } else {
-    sel.innerHTML = state.foods_config.map(f =>
-      `<option value="${f.name}" data-cal="${f.calories_per_serving}">${f.name} · ${f.serving_name} · ${f.calories_per_serving} cal</option>`
-    ).join('');
-    if (prev) sel.value = prev;
-  }
+function renderFood() {
+  const sel = document.getElementById('food-select'), prev = sel.value;
+  sel.innerHTML = S.foods.length
+    ? S.foods.map(f => `<option value="${f.name}" data-cal="${f.calories_per_serving}">${f.name} · ${f.serving_name} · ${f.calories_per_serving} cal</option>`).join('')
+    : '<option value="">— add foods in Configure —</option>';
+  if (prev) sel.value = prev;
   updateCalPreview();
   renderFoodEntries();
 }
 
 function updateCalPreview() {
-  const sel      = document.getElementById('food-select');
-  const opt      = sel.options[sel.selectedIndex];
-  const cal      = opt ? parseFloat(opt.dataset.cal) || 0 : 0;
-  const servings = parseFloat(document.getElementById('food-servings').value) || 0;
-  document.getElementById('cal-preview').textContent =
-    cal && servings ? Math.round(cal * servings) : '—';
+  const sel = document.getElementById('food-select');
+  const cal = sel.options[sel.selectedIndex] ? parseFloat(sel.options[sel.selectedIndex].dataset.cal) || 0 : 0;
+  const srv = parseFloat(document.getElementById('food-servings').value) || 0;
+  document.getElementById('cal-preview').textContent = cal && srv ? Math.round(cal * srv) : '—';
 }
 
 function renderFoodEntries() {
-  const food = state.today_food;
-  const ul   = document.getElementById('food-entries');
-  ul.innerHTML = food.entries.map(e =>
+  const f = S.food;
+  document.getElementById('food-entries').innerHTML = f.entries.map(e =>
     `<li class="entry-item">
       <div>
         <div>${e.food_name}</div>
-        <div class="entry-meta">${e.num_servings} serving${e.num_servings !== 1 ? 's' : ''}</div>
+        <div class="entry-sub">${e.num_servings} serving${e.num_servings !== 1 ? 's' : ''}</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;">
         <span class="cal-badge">${e.calories} cal</span>
-        <button class="btn btn-sm btn-danger" onclick="deleteFoodEntry('${e.timestamp}')">✕</button>
+        <button class="small danger" onclick="deleteFoodEntry('${e.timestamp}')">✕</button>
       </div>
     </li>`
   ).join('');
-  const totalRow = document.getElementById('food-total-row');
-  if (food.entries.length > 0) {
-    totalRow.style.display = 'flex';
-    document.getElementById('food-total-cal').textContent = food.total_calories + ' cal';
-  } else {
-    totalRow.style.display = 'none';
-  }
+  const tr = document.getElementById('food-total-row');
+  if (f.entries.length) {
+    tr.style.display = 'flex';
+    document.getElementById('food-total-cal').textContent = f.total_calories + ' cal';
+  } else { tr.style.display = 'none'; }
 }
 
 function logFood() {
-  const sel      = document.getElementById('food-select');
-  const foodName = sel.value;
-  if (!foodName) { toast('Select a food'); return; }
-  const servings = parseFloat(document.getElementById('food-servings').value);
-  if (!servings || servings <= 0) { toast('Enter number of servings'); return; }
-  const cal = Math.round(parseFloat(sel.options[sel.selectedIndex].dataset.cal) * servings);
+  const sel = document.getElementById('food-select');
+  if (!sel.value) { toast('Select a food'); return; }
+  const srv = parseFloat(document.getElementById('food-servings').value);
+  if (!srv || srv <= 0) { toast('Enter servings'); return; }
+  const cal = Math.round(parseFloat(sel.options[sel.selectedIndex].dataset.cal) * srv);
   google.script.run
-    .withSuccessHandler(data => {
-      state.today_food = data;
-      renderFoodEntries();
-      document.getElementById('food-servings').value = '1';
-      updateCalPreview();
-      toast('Food logged ✓');
-    })
-    .withFailureHandler(err => toast('Error: ' + err.message))
-    .logFood(foodName, servings, cal);
+    .withSuccessHandler(d => { S.food = d; renderFoodEntries(); document.getElementById('food-servings').value = '1'; updateCalPreview(); toast('Food logged ✓'); })
+    .withFailureHandler(e => toast('Error: ' + e.message))
+    .logFood(sel.value, srv, cal);
 }
 
 function deleteFoodEntry(ts) {
   google.script.run
-    .withSuccessHandler(data => { state.today_food = data; renderFoodEntries(); toast('Removed'); })
-    .withFailureHandler(err => toast('Error: ' + err.message))
+    .withSuccessHandler(d => { S.food = d; renderFoodEntries(); toast('Removed'); })
+    .withFailureHandler(e => toast('Error: ' + e.message))
     .deleteFoodEntry(ts);
 }
 
 // ── Activities ────────────────────────────────────────────────────────────────
-function renderActivitiesSection() {
-  const container = document.getElementById('activities-list');
-  if (state.activities_config.length === 0) {
-    container.innerHTML = '<div class="empty-state">No activities configured yet.<br>Add some in ⚙️ Configure.</div>';
+function renderActivities() {
+  const el = document.getElementById('activities-list');
+  if (!S.activities.length) {
+    el.innerHTML = '<div class="empty">No activities configured yet.<br>Add some in ⚙️ Configure.</div>';
     return;
   }
-  container.innerHTML = state.activities_config.map(a => {
-    const val      = state.today_activities[a.name];
-    const goalText = a.goal ? `goal: ${a.goal}${a.unit ? ' ' + a.unit : ''}` : '';
+  el.innerHTML = S.activities.map(a => {
+    const val = S.acts[a.name];
+    const goalTxt = a.goal ? `goal: ${a.goal}${a.unit ? ' ' + a.unit : ''}` : '';
     if (a.type === 'checkbox') {
-      const checked = (val === true || val === 'TRUE' || val == 1) ? 'checked' : '';
+      const chk = (val === true || val === 'TRUE' || val == 1) ? 'checked' : '';
       return `<div class="act-row">
-        <div>
-          <div class="act-name">${a.name}</div>
-          ${goalText ? `<div class="act-goal">${goalText}</div>` : ''}
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="act-${CSS.escape(a.name)}" ${checked}>
-          <span class="toggle-slider"></span>
-        </label>
+        <div><div class="act-name">${a.name}</div>${goalTxt ? `<div class="act-goal">${goalTxt}</div>` : ''}</div>
+        <label class="toggle"><input type="checkbox" id="act-${CSS.escape(a.name)}" ${chk}><span class="toggle-slider"></span></label>
       </div>`;
     } else {
-      const curVal = (val !== undefined && val !== '') ? val : '';
       return `<div class="act-row">
-        <div>
-          <div class="act-name">${a.name}${a.unit ? ' <span style="color:#8e8e93;font-size:13px;">(' + a.unit + ')</span>' : ''}</div>
-          ${goalText ? `<div class="act-goal">${goalText}</div>` : ''}
-        </div>
-        <input type="number" class="act-input" id="act-${CSS.escape(a.name)}" value="${curVal}" placeholder="0" min="0">
+        <div><div class="act-name">${a.name}${a.unit ? ` <span style="font-size:13px;color:#6e6e73;">(${a.unit})</span>` : ''}</div>${goalTxt ? `<div class="act-goal">${goalTxt}</div>` : ''}</div>
+        <div class="act-input-wrap"><input type="number" id="act-${CSS.escape(a.name)}" value="${val !== undefined ? val : ''}" placeholder="0" min="0"></div>
       </div>`;
     }
   }).join('');
 }
 
 function saveActivities() {
-  const entries = state.activities_config.map(a => {
-    const el    = document.getElementById('act-' + CSS.escape(a.name));
-    const value = a.type === 'checkbox'
-      ? (el && el.checked ? 1 : 0)
-      : (el ? parseFloat(el.value) || 0 : 0);
-    return { name: a.name, value };
+  const entries = S.activities.map(a => {
+    const el = document.getElementById('act-' + CSS.escape(a.name));
+    return { name: a.name, value: a.type === 'checkbox' ? (el && el.checked ? 1 : 0) : (el ? parseFloat(el.value) || 0 : 0) };
   });
   google.script.run
-    .withSuccessHandler(data => {
-      state.today_activities = data;
-      renderActivitiesSection();
-      toast('Activities saved ✓');
-    })
-    .withFailureHandler(err => toast('Error: ' + err.message))
+    .withSuccessHandler(d => { S.acts = d; renderActivities(); toast('Saved ✓'); })
+    .withFailureHandler(e => toast('Error: ' + e.message))
     .logActivities(entries);
 }
 
 // ── History ───────────────────────────────────────────────────────────────────
-function historyNav(delta) {
-  const d = new Date(state.hist_date + 'T12:00:00');
-  d.setDate(d.getDate() + delta);
-  if (d > new Date()) return;
-  state.hist_date = d.toISOString().substring(0, 10);
-  loadHistoryDate(state.hist_date);
+function historyNav(d) {
+  const dt = new Date(S.histDate + 'T12:00:00');
+  dt.setDate(dt.getDate() + d);
+  if (dt > new Date()) return;
+  S.histDate = dt.toISOString().slice(0, 10);
+  loadHistoryDate(S.histDate);
 }
 
 function loadHistoryDate(date) {
   document.getElementById('hist-date').textContent = date;
-  document.getElementById('hist-fwd-btn').disabled = (date >= new Date().toISOString().substring(0, 10));
-  document.getElementById('hist-content').innerHTML = '<div class="spinner">Loading…</div>';
+  document.getElementById('hist-fwd-btn').disabled = date >= new Date().toISOString().slice(0, 10);
+  document.getElementById('hist-content').innerHTML = '<div class="empty">Loading…</div>';
   google.script.run
-    .withSuccessHandler(data => renderHistoryPage(date, data))
-    .withFailureHandler(err => {
-      document.getElementById('hist-content').innerHTML =
-        '<div class="spinner">Error: ' + err.message + '</div>';
-    })
+    .withSuccessHandler(data => renderHistory(date, data))
+    .withFailureHandler(e => { document.getElementById('hist-content').innerHTML = '<div class="empty">Error: ' + e.message + '</div>'; })
     .getHistoryPage(90);
 }
 
-function renderHistoryPage(date, data) {
-  const wEntry  = (data.weight     || []).find(w => w.date === date);
-  const foodDay = (data.food       || {})[date];
-  const actDay  = (data.activities || {})[date];
-
+function renderHistory(date, data) {
+  const w   = (data.weight || []).find(r => r.date === date);
+  const fd  = (data.food   || {})[date];
+  const act = (data.activities || {})[date];
   let html = '';
 
-  // Weight
-  html += '<div class="card"><div class="card-title">⚖️ Weight</div>';
-  if (wEntry) {
-    html += `<div class="stat-big">${wEntry.average} lbs</div>
-             <div class="stat-label">${wEntry.count} measurement${wEntry.count !== 1 ? 's' : ''}</div>`;
-  } else {
-    html += '<div class="empty-state">No weight logged</div>';
-  }
+  html += '<div class="card">';
+  html += '<div class="lbl" style="margin-bottom:10px;">Weight</div>';
+  if (w) { html += `<div class="stat-big">${w.average} lbs</div><div class="stat-sub">${w.count} measurement${w.count !== 1 ? 's' : ''}</div>`; }
+  else   { html += '<div class="empty">No weight logged</div>'; }
   html += '</div>';
 
-  // Food
-  html += '<div class="card"><div class="card-title">🍎 Food</div>';
-  if (foodDay && foodDay.entries.length) {
-    html += '<ul class="entry-list">' + foodDay.entries.map(e =>
-      `<li class="entry-item">
-        <div>${e.food_name}<div class="entry-meta">${e.num_servings} serving${e.num_servings !== 1 ? 's' : ''}</div></div>
-        <span class="cal-badge">${e.calories} cal</span>
-      </li>`
+  html += '<div class="card">';
+  html += '<div class="lbl" style="margin-bottom:10px;">Food</div>';
+  if (fd && fd.entries.length) {
+    html += '<ul class="entry-list">' + fd.entries.map(e =>
+      `<li class="entry-item"><div>${e.food_name}<div class="entry-sub">${e.num_servings} serving${e.num_servings !== 1 ? 's' : ''}</div></div><span class="cal-badge">${e.calories} cal</span></li>`
     ).join('') + '</ul>';
-    html += `<div class="total-row"><span>Total</span><span class="cal-badge">${foodDay.total_calories} cal</span></div>`;
-  } else {
-    html += '<div class="empty-state">No food logged</div>';
-  }
+    html += `<div class="total-row"><span>Total</span><span class="cal-badge">${fd.total_calories} cal</span></div>`;
+  } else { html += '<div class="empty">No food logged</div>'; }
   html += '</div>';
 
-  // Activities
-  html += '<div class="card"><div class="card-title">🏃 Activities</div>';
-  if (actDay && Object.keys(actDay).length) {
-    html += '<ul class="entry-list">' + Object.entries(actDay).map(([name, val]) => {
-      const display = (val === 1 || val === '1' || val === true || val === 'TRUE')
-        ? '<span style="color:#34c759;font-size:18px;">✓</span>'
-        : (val === 0 || val === '0' || val === false || val === 'FALSE')
-        ? '<span style="color:#c7c7cc;">—</span>'
-        : `<strong>${val}</strong>`;
-      return `<li class="entry-item"><span>${name}</span><span>${display}</span></li>`;
+  html += '<div class="card">';
+  html += '<div class="lbl" style="margin-bottom:10px;">Activities</div>';
+  if (act && Object.keys(act).length) {
+    html += '<ul class="entry-list">' + Object.entries(act).map(([name, val]) => {
+      const disp = (val == 1 || val === 'TRUE') ? '<span style="color:#34c759;font-size:18px;">✓</span>'
+                 : (val == 0 || val === 'FALSE') ? '<span style="color:#c7c7cc;">—</span>'
+                 : `<strong>${val}</strong>`;
+      return `<li class="entry-item"><span>${name}</span><span>${disp}</span></li>`;
     }).join('') + '</ul>';
-  } else {
-    html += '<div class="empty-state">No activities logged</div>';
-  }
+  } else { html += '<div class="empty">No activities logged</div>'; }
   html += '</div>';
 
   document.getElementById('hist-content').innerHTML = html;
 }
 
 // ── Configure ─────────────────────────────────────────────────────────────────
-function renderConfigAll() {
-  renderFoodsConfig();
-  renderActsConfig();
-}
+function renderConfig() { renderFoodsConfig(); renderActsConfig(); }
 
 function renderFoodsConfig() {
-  const list = document.getElementById('foods-config-list');
-  if (!state.foods_config.length) {
-    list.innerHTML = '<div class="empty-state" style="padding:8px 0;">No foods yet.</div>';
-    return;
-  }
-  list.innerHTML = state.foods_config.map(f =>
-    `<div class="config-row foods-row">
-      <span style="font-weight:500;">${f.name}</span>
-      <span>${f.serving_name}</span>
-      <span style="color:#8e8e93;font-size:12px;">${f.serving_size}</span>
-      <span>${f.calories_per_serving}</span>
-      <button class="btn btn-sm btn-danger" onclick="deleteFood(${JSON.stringify(f.name)})">✕</button>
-    </div>`
-  ).join('');
+  document.getElementById('foods-config-list').innerHTML = S.foods.length
+    ? S.foods.map(f =>
+        `<div class="cfg-row">
+          <div class="cfg-name">${f.name}</div>
+          <div class="cfg-meta">${f.serving_name}${f.serving_size ? ' · ' + f.serving_size : ''}</div>
+          <div class="cfg-cal">${f.calories_per_serving} cal</div>
+          <button class="small danger" onclick="deleteFood(${JSON.stringify(f.name)})">✕</button>
+        </div>`
+      ).join('')
+    : '<div class="empty">No foods yet.</div>';
 }
 
 function renderActsConfig() {
-  const list = document.getElementById('acts-config-list');
-  if (!state.activities_config.length) {
-    list.innerHTML = '<div class="empty-state" style="padding:8px 0;">No activities yet.</div>';
-    return;
-  }
-  list.innerHTML = state.activities_config.map(a =>
-    `<div class="config-row acts-row">
-      <span style="font-weight:500;">${a.name}</span>
-      <span style="color:#8e8e93;font-size:12px;">${a.type}</span>
-      <span style="color:#8e8e93;font-size:12px;">${a.unit || '—'}</span>
-      <span style="color:#8e8e93;font-size:12px;">${a.goal || '—'}</span>
-      <button class="btn btn-sm btn-danger" onclick="deleteActivity(${JSON.stringify(a.name)})">✕</button>
-    </div>`
-  ).join('');
+  document.getElementById('acts-config-list').innerHTML = S.activities.length
+    ? S.activities.map(a =>
+        `<div class="cfg-row">
+          <div class="cfg-name">${a.name}</div>
+          <div class="cfg-meta">${a.type}${a.unit ? ' · ' + a.unit : ''}</div>
+          <div class="cfg-cal">${a.goal || '—'}</div>
+          <button class="small danger" onclick="deleteActivity(${JSON.stringify(a.name)})">✕</button>
+        </div>`
+      ).join('')
+    : '<div class="empty">No activities yet.</div>';
 }
 
 function addFood() {
-  const name         = document.getElementById('new-food-name').value.trim();
-  const serving_name = document.getElementById('new-food-serving-name').value.trim();
-  const serving_size = document.getElementById('new-food-serving-size').value.trim();
-  const calories     = parseFloat(document.getElementById('new-food-calories').value);
-  if (!name)     { toast('Food name required'); return; }
-  if (!calories) { toast('Calories required'); return; }
+  const name = document.getElementById('new-food-name').value.trim();
+  const sn   = document.getElementById('new-food-serving-name').value.trim();
+  const ss   = document.getElementById('new-food-serving-size').value.trim();
+  const cal  = parseFloat(document.getElementById('new-food-calories').value);
+  if (!name) { toast('Name required'); return; }
+  if (!cal)  { toast('Calories required'); return; }
   google.script.run
     .withSuccessHandler(foods => {
-      state.foods_config = foods;
-      renderFoodsConfig();
-      renderFoodSection();
-      ['new-food-name','new-food-serving-name','new-food-serving-size','new-food-calories']
-        .forEach(id => { document.getElementById(id).value = ''; });
+      S.foods = foods; renderFoodsConfig(); renderFood();
+      ['new-food-name','new-food-serving-name','new-food-serving-size','new-food-calories'].forEach(id => document.getElementById(id).value = '');
       toast('Food added ✓');
     })
-    .withFailureHandler(err => toast('Error: ' + err.message))
-    .saveFood({ name, serving_name, serving_size, calories_per_serving: calories });
+    .withFailureHandler(e => toast('Error: ' + e.message))
+    .saveFood({ name, serving_name: sn, serving_size: ss, calories_per_serving: cal });
 }
 
 function deleteFood(name) {
   if (!confirm('Delete "' + name + '"?')) return;
   google.script.run
-    .withSuccessHandler(foods => {
-      state.foods_config = foods;
-      renderFoodsConfig();
-      renderFoodSection();
-      toast('Deleted');
-    })
-    .withFailureHandler(err => toast('Error: ' + err.message))
+    .withSuccessHandler(foods => { S.foods = foods; renderFoodsConfig(); renderFood(); toast('Deleted'); })
+    .withFailureHandler(e => toast('Error: ' + e.message))
     .deleteFood(name);
 }
 
@@ -561,31 +651,23 @@ function addActivity() {
   const type = document.getElementById('new-act-type').value;
   const unit = document.getElementById('new-act-unit').value.trim();
   const goal = document.getElementById('new-act-goal').value.trim();
-  if (!name) { toast('Activity name required'); return; }
+  if (!name) { toast('Name required'); return; }
   google.script.run
     .withSuccessHandler(acts => {
-      state.activities_config = acts;
-      renderActsConfig();
-      renderActivitiesSection();
-      ['new-act-name','new-act-unit','new-act-goal']
-        .forEach(id => { document.getElementById(id).value = ''; });
+      S.activities = acts; renderActsConfig(); renderActivities();
+      ['new-act-name','new-act-unit','new-act-goal'].forEach(id => document.getElementById(id).value = '');
       document.getElementById('new-act-type').value = 'checkbox';
       toast('Activity added ✓');
     })
-    .withFailureHandler(err => toast('Error: ' + err.message))
+    .withFailureHandler(e => toast('Error: ' + e.message))
     .saveActivity({ name, type, unit, goal });
 }
 
 function deleteActivity(name) {
   if (!confirm('Delete "' + name + '"?')) return;
   google.script.run
-    .withSuccessHandler(acts => {
-      state.activities_config = acts;
-      renderActsConfig();
-      renderActivitiesSection();
-      toast('Deleted');
-    })
-    .withFailureHandler(err => toast('Error: ' + err.message))
+    .withSuccessHandler(acts => { S.activities = acts; renderActsConfig(); renderActivities(); toast('Deleted'); })
+    .withFailureHandler(e => toast('Error: ' + e.message))
     .deleteActivity(name);
 }
 </script>
