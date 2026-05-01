@@ -378,6 +378,10 @@
 <div class="toast" id="toast"></div>
 
 <script>
+// ── Helpers ───────────────────────────────────────────────────────────────────
+// Escape a JS value for safe embedding inside an HTML double-quoted attribute.
+function _attr(s) { return JSON.stringify(s).replace(/"/g, '&quot;'); }
+
 // ── State ─────────────────────────────────────────────────────────────────────
 const TODAY = new Date().toISOString().slice(0, 10);
 const S = {
@@ -397,7 +401,10 @@ function showTab(name, el) {
   document.getElementById('pane-' + name).classList.add('active');
   el.classList.add('active');
   if (name === 'history')   loadHistoryDate(S.histDate);
-  if (name === 'configure') renderConfig();
+  if (name === 'configure') {
+    renderConfig();
+    if (!S.foods.length && !S.activities.length) loadConfigData();
+  }
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
@@ -433,6 +440,17 @@ function changeLogDate() {
   if (!d) return;
   S.logDate = d;
   loadLogDate(d);
+}
+
+function loadConfigData() {
+  google.script.run
+    .withSuccessHandler(d => {
+      S.foods      = d.foods_config      || [];
+      S.activities = d.activities_config || [];
+      renderConfig();
+    })
+    .withFailureHandler(e => toast('Load error: ' + e.message))
+    .getDateSummary(S.logDate);
 }
 
 // ── Weight ────────────────────────────────────────────────────────────────────
@@ -631,7 +649,7 @@ function renderFoodsConfig() {
               <div class="col"><label>Calories / serving</label><input type="number" id="ef-cal" value="${f.calories_per_serving}"></div>
             </div>
             <div style="display:flex;gap:8px;width:100%;">
-              <button class="small blue" onclick="saveFoodEdit(${JSON.stringify(f.name)})" style="flex:1;padding:10px;">Save</button>
+              <button class="small blue" onclick="saveFoodEdit(${_attr(f.name)})" style="flex:1;padding:10px;">Save</button>
               <button class="small grey" onclick="editingFood=null;renderFoodsConfig();" style="flex:1;padding:10px;">Cancel</button>
             </div>
           </div>`;
@@ -640,8 +658,8 @@ function renderFoodsConfig() {
           <div class="cfg-name">${f.name}</div>
           <div class="cfg-meta">${f.serving_name}${f.serving_size ? ' · ' + f.serving_size : ''}</div>
           <div class="cfg-cal">${f.calories_per_serving} cal</div>
-          <button class="small grey" onclick="editingFood=${JSON.stringify(f.name)};renderFoodsConfig();">Edit</button>
-          <button class="small danger" onclick="deleteFood(${JSON.stringify(f.name)})">✕</button>
+          <button class="small grey" onclick="editingFood=${_attr(f.name)};renderFoodsConfig();">Edit</button>
+          <button class="small danger" onclick="deleteFood(${_attr(f.name)})">✕</button>
         </div>`;
       }).join('')
     : '<div class="empty">No foods yet.</div>';
@@ -670,7 +688,7 @@ function renderActsConfig() {
           <div class="cfg-name">${a.name}</div>
           <div class="cfg-meta">${a.type}${a.unit ? ' · ' + a.unit : ''}</div>
           <div class="cfg-cal">${a.goal || '—'}</div>
-          <button class="small danger" onclick="deleteActivity(${JSON.stringify(a.name)})">✕</button>
+          <button class="small danger" onclick="deleteActivity(${_attr(a.name)})">✕</button>
         </div>`
       ).join('')
     : '<div class="empty">No activities yet.</div>';
