@@ -6,167 +6,80 @@
   <title>Fitness Tracker</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      background: #f2f2f7;
-      padding: 16px;
-    }
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f2f2f7; padding: 16px; }
     h1 { font-size: 22px; margin-bottom: 12px; color: #1c1c1e; }
 
-    /* Pill tab bar */
     .tabs {
-      display: flex;
-      background: #e5e5ea;
-      border-radius: 10px;
-      padding: 3px;
-      margin-bottom: 16px;
-      max-width: 480px;
+      display: flex; background: #e5e5ea; border-radius: 10px;
+      padding: 3px; margin-bottom: 16px; max-width: 480px;
     }
     .tab {
-      flex: 1;
-      text-align: center;
-      padding: 8px;
-      font-size: 15px;
-      font-weight: 600;
-      border-radius: 8px;
-      cursor: pointer;
-      color: #6e6e73;
-      transition: all 0.15s;
+      flex: 1; text-align: center; padding: 8px; font-size: 15px; font-weight: 600;
+      border-radius: 8px; cursor: pointer; color: #6e6e73; transition: all 0.15s;
     }
     .tab.active { background: white; color: #1c1c1e; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
 
-    /* Panes */
     .pane { display: none; max-width: 480px; }
     .pane.active { display: block; }
 
-    /* Cards */
-    .card {
-      background: white;
-      border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 16px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    }
+    .card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
 
-    /* Labels */
     label, .lbl {
-      display: block;
-      font-size: 13px;
-      font-weight: 600;
-      color: #6e6e73;
-      margin-bottom: 6px;
-      text-transform: uppercase;
-      letter-spacing: 0.3px;
+      display: block; font-size: 13px; font-weight: 600; color: #6e6e73;
+      margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.3px;
     }
 
-    /* Inputs */
     select, input[type=text], input[type=number], textarea {
-      width: 100%;
-      font-size: 17px;
-      padding: 10px 12px;
-      border: 1px solid #d1d1d6;
-      border-radius: 8px;
-      background: #fafafa;
-      color: #1c1c1e;
-      appearance: none;
-      -webkit-appearance: none;
+      width: 100%; font-size: 17px; padding: 10px 12px;
+      border: 1px solid #d1d1d6; border-radius: 8px; background: #fafafa;
+      color: #1c1c1e; appearance: none; -webkit-appearance: none;
     }
     textarea { font-size: 15px; resize: vertical; min-height: 72px; }
-    select:focus, input:focus, textarea:focus {
-      outline: none;
-      border-color: #007aff;
-      background: #fff;
-    }
+    select:focus, input:focus, textarea:focus { outline: none; border-color: #007aff; background: #fff; }
 
-    /* Buttons */
     button.primary {
-      width: 100%;
-      padding: 15px;
-      font-size: 17px;
-      font-weight: 600;
-      background: #007aff;
-      color: white;
-      border: none;
-      border-radius: 12px;
-      cursor: pointer;
-      margin-top: 4px;
+      width: 100%; padding: 15px; font-size: 17px; font-weight: 600;
+      background: #007aff; color: white; border: none; border-radius: 12px; cursor: pointer; margin-top: 4px;
     }
     button.primary:disabled { background: #b0c4de; cursor: default; }
     button.secondary {
-      width: 100%;
-      padding: 15px;
-      font-size: 17px;
-      font-weight: 600;
-      background: #e5e5ea;
-      color: #1c1c1e;
-      border: none;
-      border-radius: 12px;
-      cursor: pointer;
-      margin-top: 4px;
+      width: 100%; padding: 15px; font-size: 17px; font-weight: 600;
+      background: #e5e5ea; color: #1c1c1e; border: none; border-radius: 12px; cursor: pointer; margin-top: 4px;
     }
-    button.small {
-      padding: 6px 14px;
-      font-size: 14px;
-      font-weight: 600;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-    }
+    button.small { padding: 6px 14px; font-size: 14px; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; }
     button.small.danger { background: #ff3b30; color: white; }
     button.small.blue   { background: #007aff; color: white; }
     button.small.grey   { background: #e5e5ea; color: #1c1c1e; }
 
-    /* Stat display */
-    .stat-big   { font-size: 38px; font-weight: 300; color: #007aff; line-height: 1; }
-    .stat-sub   { font-size: 13px; color: #6e6e73; margin-top: 4px; }
+    .stat-big { font-size: 38px; font-weight: 300; color: #007aff; line-height: 1; }
+    .stat-sub { font-size: 13px; color: #6e6e73; margin-top: 4px; }
 
-    /* Row layouts */
     .row { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 12px; }
     .row > * { flex: 1; }
     .row > button { flex: 0 0 auto; }
     .col { display: flex; flex-direction: column; gap: 4px; }
 
-    /* Entry list */
     .entry-list { list-style: none; margin-top: 8px; }
     .entry-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 9px 0;
-      border-bottom: 1px solid #f2f2f7;
-      font-size: 15px;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 9px 0; border-bottom: 1px solid #f2f2f7; font-size: 15px;
     }
     .entry-item:last-child { border-bottom: none; }
     .entry-sub { font-size: 13px; color: #6e6e73; margin-top: 2px; }
 
-    /* Cal badge */
     .cal-badge {
-      background: #ff9500;
-      color: white;
-      border-radius: 6px;
-      padding: 2px 9px;
-      font-size: 13px;
-      font-weight: 600;
-      white-space: nowrap;
+      background: #ff9500; color: white; border-radius: 6px;
+      padding: 2px 9px; font-size: 13px; font-weight: 600; white-space: nowrap;
     }
     .total-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding-top: 10px;
-      margin-top: 4px;
-      border-top: 1px solid #e5e5ea;
-      font-weight: 600;
-      font-size: 15px;
+      display: flex; justify-content: space-between; align-items: center;
+      padding-top: 10px; margin-top: 4px; border-top: 1px solid #e5e5ea;
+      font-weight: 600; font-size: 15px;
     }
 
-    /* Activity rows */
     .act-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 11px 0;
-      border-bottom: 1px solid #f2f2f7;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 11px 0; border-bottom: 1px solid #f2f2f7;
     }
     .act-row:last-child { border-bottom: none; }
     .act-name { font-size: 16px; font-weight: 500; color: #1c1c1e; }
@@ -174,7 +87,6 @@
     .act-input-wrap { flex: 0 0 90px; }
     .act-input-wrap input { font-size: 17px; text-align: center; }
 
-    /* Toggle */
     .toggle { position: relative; display: inline-block; width: 51px; height: 31px; }
     .toggle input { opacity: 0; width: 0; height: 0; }
     .toggle-slider {
@@ -182,73 +94,40 @@
       background: #e5e5ea; border-radius: 31px; transition: .3s;
     }
     .toggle-slider:before {
-      content: ''; position: absolute;
-      width: 27px; height: 27px; left: 2px; bottom: 2px;
-      background: white; border-radius: 50%; transition: .3s;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      content: ''; position: absolute; width: 27px; height: 27px; left: 2px; bottom: 2px;
+      background: white; border-radius: 50%; transition: .3s; box-shadow: 0 1px 3px rgba(0,0,0,0.3);
     }
     input:checked + .toggle-slider { background: #34c759; }
     input:checked + .toggle-slider:before { transform: translateX(20px); }
 
-    /* Date nav */
-    .date-nav {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 16px;
-    }
-    .date-nav .date-label { font-size: 17px; font-weight: 600; color: #1c1c1e; }
-    .date-nav button {
-      background: none; border: none; font-size: 28px;
-      color: #007aff; cursor: pointer; padding: 0 8px; line-height: 1;
-    }
-    .date-nav button:disabled { color: #c7c7cc; cursor: default; }
-
-    /* Config table */
     .cfg-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 0;
-      border-bottom: 1px solid #f2f2f7;
-      font-size: 15px;
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 0; border-bottom: 1px solid #f2f2f7; font-size: 15px;
     }
     .cfg-row:last-child { border-bottom: none; }
     .cfg-name { flex: 2; font-weight: 500; color: #1c1c1e; }
     .cfg-meta { flex: 1; font-size: 13px; color: #6e6e73; }
-    .cfg-cal  { flex: 0 0 70px; font-size: 13px; color: #6e6e73; text-align: right; }
+    .cfg-cal  { flex: 0 0 60px; font-size: 13px; color: #6e6e73; text-align: right; }
 
-    .section-divider {
-      margin-top: 16px;
-      padding-top: 16px;
-      border-top: 1px solid #e5e5ea;
-    }
-    .section-title {
-      font-size: 13px; font-weight: 600; color: #6e6e73;
-      text-transform: uppercase; letter-spacing: 0.3px;
-      margin-bottom: 12px;
-    }
-    .form-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-bottom: 10px;
-    }
+    .section-divider { margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e5ea; }
+    .section-title { font-size: 13px; font-weight: 600; color: #6e6e73; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 12px; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
     .form-grid .col > input { margin-top: 0; }
 
-    /* Status / empty */
     .empty { text-align: center; color: #8e8e93; font-size: 15px; padding: 16px 0; }
     .status { text-align: center; margin-top: 10px; font-size: 15px; color: #3a3a3c; min-height: 20px; }
-    .status.success { color: #34c759; }
-    .status.error   { color: #ff3b30; }
 
-    /* Toast */
     .toast {
       position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
-      background: rgba(0,0,0,.8); color: white;
-      padding: 10px 22px; border-radius: 20px;
-      font-size: 15px; opacity: 0; transition: opacity .25s;
-      pointer-events: none; z-index: 999; white-space: nowrap;
+      background: rgba(0,0,0,.8); color: white; padding: 10px 22px; border-radius: 20px;
+      font-size: 15px; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 999; white-space: nowrap;
     }
     .toast.show { opacity: 1; }
+
+    /* Chart controls row */
+    .chart-controls { display: flex; gap: 10px; margin-bottom: 12px; align-items: flex-end; }
+    .chart-controls .col { flex: 1; }
+    .chart-controls select, .chart-controls input { font-size: 15px; padding: 8px 10px; }
   </style>
 </head>
 <body>
@@ -264,7 +143,6 @@
 <!-- ══ LOG ══════════════════════════════════════════════════════════════════ -->
 <div id="pane-log" class="pane active">
 
-  <!-- Date picker -->
   <div class="card" style="margin-bottom:12px;">
     <label>Logging for</label>
     <input type="date" id="log-date" onchange="changeLogDate()">
@@ -273,8 +151,8 @@
   <!-- Weight -->
   <div class="card">
     <div style="text-align:center;margin-bottom:14px;">
-      <div class="stat-big" id="weight-avg">—</div>
-      <div class="stat-sub" id="weight-avg-label">no entries today</div>
+      <div class="stat-big" id="weight-display">—</div>
+      <div class="stat-sub" id="weight-label">not logged</div>
     </div>
     <label>Weight (lbs)</label>
     <div class="row">
@@ -282,7 +160,6 @@
              onkeydown="if(event.key==='Enter')logWeight()">
       <button class="small blue" onclick="logWeight()" style="padding:10px 18px;font-size:16px;">Log</button>
     </div>
-    <ul class="entry-list" id="weight-entries"></ul>
   </div>
 
   <!-- Food -->
@@ -302,8 +179,16 @@
       <button class="small blue" onclick="logFood()" style="padding:10px 18px;font-size:16px;">Log</button>
     </div>
     <div class="total-row" id="food-total-row" style="display:none;">
-      <span>Today's total</span>
+      <span>Food</span>
       <span class="cal-badge" id="food-total-cal"></span>
+    </div>
+    <div class="total-row" id="food-burn-row" style="display:none;">
+      <span>Activity burn</span>
+      <span class="cal-badge" style="background:#34c759;" id="food-burn-cal"></span>
+    </div>
+    <div class="total-row" id="food-net-row" style="display:none;border-top:2px solid #e5e5ea;margin-top:6px;padding-top:10px;">
+      <span style="font-weight:700;">Net</span>
+      <span class="cal-badge" style="background:#ff3b30;" id="food-net-cal"></span>
     </div>
     <ul class="entry-list" id="food-entries"></ul>
   </div>
@@ -319,12 +204,46 @@
 
 <!-- ══ HISTORY ══════════════════════════════════════════════════════════════ -->
 <div id="pane-history" class="pane">
-  <div class="date-nav">
-    <button onclick="historyNav(-1)">‹</button>
-    <span class="date-label" id="hist-date"></span>
-    <button id="hist-fwd-btn" onclick="historyNav(1)">›</button>
+
+  <div class="tabs" id="hist-tabs" style="margin-bottom:16px;">
+    <div class="tab active" onclick="showHistTab('weight', this)">⚖️ Weight</div>
+    <div class="tab" onclick="showHistTab('calories', this)">🔥 Calories</div>
+    <div class="tab" onclick="showHistTab('activities', this)">🏃 Activities</div>
   </div>
-  <div id="hist-content"><div class="empty">Loading…</div></div>
+
+  <!-- Weight sub-pane -->
+  <div id="hist-weight">
+    <div class="card">
+      <div class="chart-controls">
+        <div class="col">
+          <label>Days back</label>
+          <select id="wt-days" onchange="renderHistWeight()">
+            <option value="14">14 days</option>
+            <option value="30" selected>30 days</option>
+            <option value="60">60 days</option>
+            <option value="90">90 days</option>
+          </select>
+        </div>
+        <div class="col"><label>Y min (lbs)</label><input type="number" id="wt-ymin" placeholder="auto" step="0.5" oninput="renderHistWeight()"></div>
+        <div class="col"><label>Y max (lbs)</label><input type="number" id="wt-ymax" placeholder="auto" step="0.5" oninput="renderHistWeight()"></div>
+      </div>
+      <div id="wt-chart-wrap"><div class="empty">Loading…</div></div>
+    </div>
+  </div>
+
+  <!-- Calories sub-pane -->
+  <div id="hist-calories" style="display:none;">
+    <div class="card">
+      <div style="font-size:13px;color:#6e6e73;margin-bottom:12px;">Last 7 days · blue = food · <span style="color:#34c759;">green</span> = activity burn · label = net</div>
+      <div id="cal-chart-wrap"><div class="empty">Loading…</div></div>
+    </div>
+  </div>
+
+  <!-- Activities sub-pane -->
+  <div id="hist-activities" style="display:none;">
+    <div id="hist-acts-content"><div class="card"><div class="empty">Loading…</div></div></div>
+  </div>
+
 </div>
 
 <!-- ══ CONFIGURE ════════════════════════════════════════════════════════════ -->
@@ -337,7 +256,6 @@
 
   <!-- Foods sub-pane -->
   <div id="cfg-foods">
-
     <div class="card">
       <div class="section-title">Add Food</div>
       <div class="form-grid">
@@ -350,17 +268,14 @@
       </div>
       <button class="primary" onclick="addFood()">Add Food</button>
     </div>
-
     <div class="card">
       <input type="text" id="food-filter" placeholder="Search foods…" oninput="renderFoodsConfig()" style="margin-bottom:10px;">
       <div id="foods-config-list"></div>
     </div>
-
   </div>
 
   <!-- Activities sub-pane -->
   <div id="cfg-acts" style="display:none;">
-
     <div class="card">
       <div class="section-title">Add Activity</div>
       <div class="form-grid">
@@ -376,14 +291,18 @@
         <div class="col"><label>Unit</label><input type="text" id="new-act-unit" placeholder="e.g. minutes"></div>
         <div class="col"><label>Goal</label><input type="text" id="new-act-goal" placeholder="e.g. 30"></div>
       </div>
+      <div class="form-grid">
+        <div class="col"><label>Calories burned</label><input type="number" id="new-act-calories" placeholder="e.g. 300"></div>
+        <div class="col" style="justify-content:flex-end;padding-bottom:6px;">
+          <span style="font-size:12px;color:#8e8e93;line-height:1.4;">Checkbox: total per session.<br>Number: per unit.</span>
+        </div>
+      </div>
       <button class="primary" onclick="addActivity()">Add Activity</button>
     </div>
-
     <div class="card">
       <input type="text" id="act-filter" placeholder="Search activities…" oninput="renderActsConfig()" style="margin-bottom:10px;">
       <div id="acts-config-list"></div>
     </div>
-
   </div>
 
 </div>
@@ -392,7 +311,6 @@
 
 <script>
 // ── Helpers ───────────────────────────────────────────────────────────────────
-// Escape a JS value for safe embedding inside an HTML double-quoted attribute.
 function _attr(s) { return JSON.stringify(s).replace(/"/g, '&quot;'); }
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -400,11 +318,12 @@ const TODAY = new Date().toISOString().slice(0, 10);
 const S = {
   foods:      [],
   activities: [],
-  wt:         { entries: [], average: null },
+  wt:         { weight: null },
   food:       { entries: [], total_calories: 0 },
   acts:       {},
   logDate:    TODAY,
-  histDate:   TODAY
+  histData:   null,
+  histTab:    'weight'
 };
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
@@ -413,7 +332,10 @@ function showTab(name, el) {
   document.querySelectorAll('#main-tabs .tab').forEach(t => t.classList.remove('active'));
   document.getElementById('pane-' + name).classList.add('active');
   el.classList.add('active');
-  if (name === 'history')   loadHistoryDate(S.histDate);
+  if (name === 'history') {
+    if (!S.histData) loadHistory();
+    else renderHistTab(S.histTab);
+  }
   if (name === 'configure') {
     renderConfig();
     if (!S.foods.length && !S.activities.length) loadConfigData();
@@ -426,6 +348,23 @@ function showConfigTab(name, el) {
   document.getElementById('cfg-acts').style.display  = 'none';
   document.getElementById('cfg-' + name).style.display = 'block';
   el.classList.add('active');
+}
+
+function showHistTab(name, el) {
+  document.querySelectorAll('#hist-tabs .tab').forEach(t => t.classList.remove('active'));
+  ['weight','calories','activities'].forEach(n =>
+    document.getElementById('hist-' + n).style.display = n === name ? 'block' : 'none'
+  );
+  el.classList.add('active');
+  S.histTab = name;
+  if (!S.histData) { loadHistory(); return; }
+  renderHistTab(name);
+}
+
+function renderHistTab(name) {
+  if (name === 'weight')     renderHistWeight();
+  if (name === 'calories')   renderHistCalories();
+  if (name === 'activities') renderHistActivities();
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
@@ -447,8 +386,8 @@ function loadLogDate(date) {
     .withSuccessHandler(d => {
       S.foods      = d.foods_config      || [];
       S.activities = d.activities_config || [];
-      S.wt         = d.weight     || { entries: [], average: null };
-      S.food       = d.food       || { entries: [], total_calories: 0 };
+      S.wt         = d.weight   || { weight: null };
+      S.food       = d.food     || { entries: [], total_calories: 0 };
       S.acts       = d.activities || {};
       renderWeight(); renderFood(); renderActivities();
     })
@@ -474,22 +413,18 @@ function loadConfigData() {
     .getDateSummary(S.logDate);
 }
 
+function loadHistory() {
+  google.script.run
+    .withSuccessHandler(data => { S.histData = data; renderHistTab(S.histTab); })
+    .withFailureHandler(e => toast('History error: ' + e.message))
+    .getHistoryPage(90);
+}
+
 // ── Weight ────────────────────────────────────────────────────────────────────
 function renderWeight() {
-  const w = S.wt;
-  document.getElementById('weight-avg').textContent =
-    w.average ? w.average + ' lbs' : '—';
-  document.getElementById('weight-avg-label').textContent =
-    !w.entries.length ? 'no entries today' :
-    w.entries.length === 1 ? '1 entry today' :
-    w.entries.length + ' entries — average';
-  document.getElementById('weight-entries').innerHTML = w.entries.map(e => {
-    const t = String(e.time).length > 10 ? String(e.time).slice(11, 16) : '';
-    return `<li class="entry-item">
-      <span>${e.weight} lbs</span>
-      <span style="font-size:13px;color:#6e6e73;">${t}</span>
-    </li>`;
-  }).join('');
+  const w = S.wt.weight;
+  document.getElementById('weight-display').textContent = w ? w + ' lbs' : '—';
+  document.getElementById('weight-label').textContent   = w ? 'logged' : 'not logged';
 }
 
 function logWeight() {
@@ -519,6 +454,16 @@ function updateCalPreview() {
   document.getElementById('cal-preview').textContent = cal && srv ? Math.round(cal * srv) : '—';
 }
 
+function computeActCal() {
+  return Math.round(S.activities.reduce((sum, a) => {
+    if (!a.calories) return sum;
+    const v = S.acts[a.name];
+    if (v === undefined || v === null || v === '') return sum;
+    if (a.type === 'checkbox') return sum + ((v == 1 || v === true || v === 'TRUE') ? a.calories : 0);
+    return sum + (parseFloat(v) || 0) * a.calories;
+  }, 0));
+}
+
 function renderFoodEntries() {
   const f = S.food;
   document.getElementById('food-entries').innerHTML = f.entries.map(e =>
@@ -529,15 +474,32 @@ function renderFoodEntries() {
       </div>
       <div style="display:flex;align-items:center;gap:8px;">
         <span class="cal-badge">${e.calories} cal</span>
-        <button class="small danger" onclick="deleteFoodEntry('${e.timestamp}')">✕</button>
+        <button class="small danger" onclick="deleteFoodEntry(${_attr(e.timestamp)})">✕</button>
       </div>
     </li>`
   ).join('');
-  const tr = document.getElementById('food-total-row');
+  renderCalTotals();
+}
+
+function renderCalTotals() {
+  const f    = S.food;
+  const burn = computeActCal();
+  const tr   = document.getElementById('food-total-row');
+  const br   = document.getElementById('food-burn-row');
+  const nr   = document.getElementById('food-net-row');
   if (f.entries.length) {
     tr.style.display = 'flex';
     document.getElementById('food-total-cal').textContent = f.total_calories + ' cal';
-  } else { tr.style.display = 'none'; }
+    if (burn > 0) {
+      br.style.display = 'flex'; nr.style.display = 'flex';
+      document.getElementById('food-burn-cal').textContent = '−' + burn + ' cal';
+      document.getElementById('food-net-cal').textContent  = Math.max(0, f.total_calories - burn) + ' cal';
+    } else {
+      br.style.display = 'none'; nr.style.display = 'none';
+    }
+  } else {
+    tr.style.display = 'none'; br.style.display = 'none'; nr.style.display = 'none';
+  }
 }
 
 function logFood() {
@@ -567,17 +529,18 @@ function renderActivities() {
     return;
   }
   el.innerHTML = S.activities.map(a => {
-    const val = S.acts[a.name];
+    const val     = S.acts[a.name];
+    const calNote = a.calories ? `<span style="font-size:12px;color:#34c759;margin-left:4px;">${a.calories} cal</span>` : '';
     const goalTxt = a.goal ? `goal: ${a.goal}${a.unit ? ' ' + a.unit : ''}` : '';
     if (a.type === 'checkbox') {
       const chk = (val === true || val === 'TRUE' || val == 1) ? 'checked' : '';
       return `<div class="act-row">
-        <div><div class="act-name">${a.name}</div>${goalTxt ? `<div class="act-goal">${goalTxt}</div>` : ''}</div>
+        <div><div class="act-name">${a.name}${calNote}</div>${goalTxt ? `<div class="act-goal">${goalTxt}</div>` : ''}</div>
         <label class="toggle"><input type="checkbox" id="act-${CSS.escape(a.name)}" ${chk}><span class="toggle-slider"></span></label>
       </div>`;
     } else {
       return `<div class="act-row">
-        <div><div class="act-name">${a.name}${a.unit ? ` <span style="font-size:13px;color:#6e6e73;">(${a.unit})</span>` : ''}</div>${goalTxt ? `<div class="act-goal">${goalTxt}</div>` : ''}</div>
+        <div><div class="act-name">${a.name}${a.unit ? ` <span style="font-size:13px;color:#6e6e73;">(${a.unit})</span>` : ''}${calNote}</div>${goalTxt ? `<div class="act-goal">${goalTxt}</div>` : ''}</div>
         <div class="act-input-wrap"><input type="number" id="act-${CSS.escape(a.name)}" value="${val !== undefined ? val : ''}" placeholder="0" min="0"></div>
       </div>`;
     }
@@ -590,65 +553,178 @@ function saveActivities() {
     return { name: a.name, value: a.type === 'checkbox' ? (el && el.checked ? 1 : 0) : (el ? parseFloat(el.value) || 0 : 0) };
   });
   google.script.run
-    .withSuccessHandler(d => { S.acts = d; renderActivities(); toast('Saved ✓'); })
+    .withSuccessHandler(d => { S.acts = d; renderActivities(); renderCalTotals(); toast('Saved ✓'); })
     .withFailureHandler(e => toast('Error: ' + e.message))
     .logActivities(entries, S.logDate);
 }
 
 // ── History ───────────────────────────────────────────────────────────────────
-function historyNav(d) {
-  const dt = new Date(S.histDate + 'T12:00:00');
-  dt.setDate(dt.getDate() + d);
-  if (dt > new Date()) return;
-  S.histDate = dt.toISOString().slice(0, 10);
-  loadHistoryDate(S.histDate);
+function renderHistWeight() {
+  document.getElementById('wt-chart-wrap').innerHTML = drawWeightSvg();
 }
 
-function loadHistoryDate(date) {
-  document.getElementById('hist-date').textContent = date;
-  document.getElementById('hist-fwd-btn').disabled = date >= new Date().toISOString().slice(0, 10);
-  document.getElementById('hist-content').innerHTML = '<div class="empty">Loading…</div>';
-  google.script.run
-    .withSuccessHandler(data => renderHistory(date, data))
-    .withFailureHandler(e => { document.getElementById('hist-content').innerHTML = '<div class="empty">Error: ' + e.message + '</div>'; })
-    .getHistoryPage(90);
+function drawWeightSvg() {
+  if (!S.histData) return '<div class="empty">Loading…</div>';
+  const days   = parseInt(document.getElementById('wt-days').value) || 30;
+  const manMin = parseFloat(document.getElementById('wt-ymin').value);
+  const manMax = parseFloat(document.getElementById('wt-ymax').value);
+
+  const cutoff = new Date(TODAY + 'T00:00:00');
+  cutoff.setDate(cutoff.getDate() - days);
+  const pts = (S.histData.weight || []).filter(p => new Date(p.date + 'T00:00:00') >= cutoff);
+
+  if (!pts.length) return '<div class="empty">No weight data for this period.</div>';
+
+  const W = 440, H = 200, ML = 42, MR = 12, MT = 14, MB = 28;
+  const PW = W - ML - MR, PH = H - MT - MB;
+
+  const ws  = pts.map(p => p.weight);
+  const yLo = isNaN(manMin) ? Math.floor(Math.min(...ws)  - 1) : manMin;
+  const yHi = isNaN(manMax) ? Math.ceil(Math.max(...ws) + 1)   : manMax;
+  const yR  = yHi - yLo || 1;
+
+  const t0 = new Date(pts[0].date + 'T12:00:00').getTime();
+  const t1 = new Date(pts[pts.length - 1].date + 'T12:00:00').getTime();
+  const tR = t1 - t0 || 86400000;
+
+  const cx = p => ML + (new Date(p.date + 'T12:00:00').getTime() - t0) / tR * PW;
+  const cy = p => MT + (1 - (p.weight - yLo) / yR) * PH;
+
+  let grid = '', yLabels = '';
+  for (let i = 0; i <= 4; i++) {
+    const w = yLo + yR * i / 4;
+    const y = MT + (1 - i / 4) * PH;
+    grid    += `<line x1="${ML}" y1="${y.toFixed(1)}" x2="${W - MR}" y2="${y.toFixed(1)}" stroke="#e5e5ea" stroke-width="1"/>`;
+    yLabels += `<text x="${ML - 4}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="#8e8e93">${Math.round(w * 10) / 10}</text>`;
+  }
+
+  const path = pts.map((p, i) => `${i ? 'L' : 'M'}${cx(p).toFixed(1)},${cy(p).toFixed(1)}`).join(' ');
+  const dots = pts.map(p =>
+    `<circle cx="${cx(p).toFixed(1)}" cy="${cy(p).toFixed(1)}" r="3.5" fill="#007aff" stroke="white" stroke-width="1.5"><title>${p.date}: ${p.weight} lbs</title></circle>`
+  ).join('');
+
+  const step    = Math.max(1, Math.ceil(pts.length / 6));
+  const xLabels = pts.filter((_, i) => i % step === 0 || i === pts.length - 1).map(p =>
+    `<text x="${cx(p).toFixed(1)}" y="${H - 3}" text-anchor="middle" font-size="10" fill="#8e8e93">${p.date.slice(5)}</text>`
+  ).join('');
+
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;">
+    ${grid}
+    <path d="${path}" fill="none" stroke="#007aff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    ${dots}${yLabels}${xLabels}
+  </svg>`;
 }
 
-function renderHistory(date, data) {
-  const w   = (data.weight || []).find(r => r.date === date);
-  const fd  = (data.food   || {})[date];
-  const act = (data.activities || {})[date];
-  let html = '';
+function renderHistCalories() {
+  document.getElementById('cal-chart-wrap').innerHTML = drawCalSvg();
+}
 
-  html += '<div class="card">';
-  html += '<div class="lbl" style="margin-bottom:10px;">Weight</div>';
-  if (w) { html += `<div class="stat-big">${w.average} lbs</div><div class="stat-sub">${w.count} measurement${w.count !== 1 ? 's' : ''}</div>`; }
-  else   { html += '<div class="empty">No weight logged</div>'; }
-  html += '</div>';
+function drawCalSvg() {
+  if (!S.histData) return '<div class="empty">Loading…</div>';
+  const foodData = S.histData.food            || {};
+  const actData  = S.histData.activities      || {};
+  const actsConf = S.histData.activities_config || [];
 
-  html += '<div class="card">';
-  html += '<div class="lbl" style="margin-bottom:10px;">Food</div>';
-  if (fd && fd.entries.length) {
-    html += '<ul class="entry-list">' + fd.entries.map(e =>
-      `<li class="entry-item"><div>${e.food_name}<div class="entry-sub">${e.num_servings} serving${e.num_servings !== 1 ? 's' : ''}</div></div><span class="cal-badge">${e.calories} cal</span></li>`
-    ).join('') + '</ul>';
-    html += `<div class="total-row"><span>Total</span><span class="cal-badge">${fd.total_calories} cal</span></div>`;
-  } else { html += '<div class="empty">No food logged</div>'; }
-  html += '</div>';
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(TODAY + 'T12:00:00');
+    d.setDate(d.getDate() - i);
+    const ds   = d.toISOString().slice(0, 10);
+    const food = (foodData[ds] || {}).total_calories || 0;
+    const aLog = actData[ds] || {};
+    let burn = 0;
+    actsConf.forEach(a => {
+      if (!a.calories) return;
+      const v = aLog[a.name];
+      if (v === undefined || v === null || v === '') return;
+      if (a.type === 'checkbox') burn += (v == 1 || v === true || v === 'TRUE') ? a.calories : 0;
+      else burn += (parseFloat(v) || 0) * a.calories;
+    });
+    days.push({ date: ds, food, burn: Math.round(burn), net: Math.max(0, food - Math.round(burn)) });
+  }
 
-  html += '<div class="card">';
-  html += '<div class="lbl" style="margin-bottom:10px;">Activities</div>';
-  if (act && Object.keys(act).length) {
-    html += '<ul class="entry-list">' + Object.entries(act).map(([name, val]) => {
-      const disp = (val == 1 || val === 'TRUE') ? '<span style="color:#34c759;font-size:18px;">✓</span>'
-                 : (val == 0 || val === 'FALSE') ? '<span style="color:#c7c7cc;">—</span>'
-                 : `<strong>${val}</strong>`;
-      return `<li class="entry-item"><span>${name}</span><span>${disp}</span></li>`;
-    }).join('') + '</ul>';
-  } else { html += '<div class="empty">No activities logged</div>'; }
-  html += '</div>';
+  if (days.every(d => d.food === 0)) return '<div class="empty">No calorie data for the last 7 days.</div>';
 
-  document.getElementById('hist-content').innerHTML = html;
+  const W = 440, H = 180, ML = 40, MR = 10, MT = 22, MB = 28;
+  const PW = W - ML - MR, PH = H - MT - MB;
+  const maxCal = Math.max(...days.map(d => d.food), 500);
+  const barW   = (PW / 7) * 0.6;
+  const barGap = PW / 7;
+
+  let yLines = '';
+  for (let i = 0; i <= 3; i++) {
+    const cal = Math.round(maxCal * i / 3 / 100) * 100;
+    const y   = MT + PH - (cal / maxCal) * PH;
+    yLines += `<line x1="${ML}" y1="${y.toFixed(1)}" x2="${W - MR}" y2="${y.toFixed(1)}" stroke="#e5e5ea" stroke-width="1"/>`;
+    yLines += `<text x="${ML - 4}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="10" fill="#8e8e93">${cal}</text>`;
+  }
+
+  let bars = '';
+  days.forEach((d, i) => {
+    const bx  = ML + i * barGap + barGap * 0.2;
+    if (d.food > 0) {
+      const bh   = (d.food / maxCal) * PH;
+      const by   = MT + PH - bh;
+      bars += `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${barW.toFixed(1)}" height="${bh.toFixed(1)}" fill="#007aff" rx="3"/>`;
+      if (d.burn > 0) {
+        const burnH = Math.min((d.burn / maxCal) * PH, bh);
+        bars += `<rect x="${bx.toFixed(1)}" y="${(MT + PH - burnH).toFixed(1)}" width="${barW.toFixed(1)}" height="${burnH.toFixed(1)}" fill="#34c759" rx="3"/>`;
+      }
+      const label = d.burn > 0 ? d.net : d.food;
+      const lCol  = d.burn > 0 ? '#34c759' : '#007aff';
+      bars += `<text x="${(bx + barW / 2).toFixed(1)}" y="${(by - 4).toFixed(1)}" text-anchor="middle" font-size="10" fill="${lCol}" font-weight="600">${label}</text>`;
+    }
+    const dow = ['Su','Mo','Tu','We','Th','Fr','Sa'][new Date(d.date + 'T12:00:00').getDay()];
+    bars += `<text x="${(bx + barW / 2).toFixed(1)}" y="${H - 4}" text-anchor="middle" font-size="11" fill="#8e8e93">${dow}</text>`;
+  });
+
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;">${yLines}${bars}</svg>`;
+}
+
+function renderHistActivities() {
+  if (!S.histData) {
+    document.getElementById('hist-acts-content').innerHTML = '<div class="card"><div class="empty">Loading…</div></div>';
+    return;
+  }
+  const actData  = S.histData.activities       || {};
+  const actsConf = S.histData.activities_config || [];
+
+  const dates = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(TODAY + 'T12:00:00');
+    d.setDate(d.getDate() - i);
+    dates.push(d.toISOString().slice(0, 10));
+  }
+
+  const activeDates = dates.filter(d => actData[d] && Object.keys(actData[d]).length);
+  if (!activeDates.length) {
+    document.getElementById('hist-acts-content').innerHTML = '<div class="card"><div class="empty">No activity data for the last 14 days.</div></div>';
+    return;
+  }
+
+  document.getElementById('hist-acts-content').innerHTML = activeDates.slice().reverse().map(d => {
+    const log  = actData[d] || {};
+    const rows = actsConf.map(a => {
+      const v = log[a.name];
+      if (v === undefined) return '';
+      let disp;
+      if (a.type === 'checkbox') {
+        disp = (v == 1 || v === true || v === 'TRUE')
+          ? '<span style="color:#34c759;font-weight:700;">✓</span>'
+          : '<span style="color:#c7c7cc;">—</span>';
+      } else {
+        disp = (v !== '' && v !== null) ? `<strong>${v}${a.unit ? ' ' + a.unit : ''}</strong>` : '<span style="color:#c7c7cc;">—</span>';
+      }
+      return `<div class="act-row" style="padding:8px 0;">
+        <span class="act-name" style="font-size:15px;">${a.name}</span>
+        <span>${disp}</span>
+      </div>`;
+    }).filter(Boolean).join('');
+    return `<div class="card" style="margin-bottom:10px;">
+      <div style="font-size:13px;font-weight:600;color:#6e6e73;margin-bottom:8px;">${d}</div>
+      ${rows || '<div class="empty" style="padding:4px 0;">No entries</div>'}
+    </div>`;
+  }).join('');
 }
 
 // ── Configure ─────────────────────────────────────────────────────────────────
@@ -657,7 +733,7 @@ function renderConfig() { renderFoodsConfig(); renderActsConfig(); }
 let editingFood = null;
 
 function renderFoodsConfig() {
-  const q = (document.getElementById('food-filter')?.value || '').toLowerCase().trim();
+  const q     = (document.getElementById('food-filter')?.value || '').toLowerCase().trim();
   const foods = q ? S.foods.filter(f => f.name.toLowerCase().includes(q)) : S.foods;
   document.getElementById('foods-config-list').innerHTML = foods.length
     ? foods.map(f => {
@@ -696,23 +772,20 @@ function saveFoodEdit(originalName) {
   if (!name) { toast('Name required'); return; }
   if (!cal)  { toast('Calories required'); return; }
   google.script.run
-    .withSuccessHandler(foods => {
-      S.foods = foods; editingFood = null;
-      renderFoodsConfig(); renderFood(); toast('Food updated ✓');
-    })
+    .withSuccessHandler(foods => { S.foods = foods; editingFood = null; renderFoodsConfig(); renderFood(); toast('Food updated ✓'); })
     .withFailureHandler(e => toast('Error: ' + e.message))
     .saveFood({ name, serving_name: sn, serving_size: ss, calories_per_serving: cal, _originalName: originalName });
 }
 
 function renderActsConfig() {
-  const q = (document.getElementById('act-filter')?.value || '').toLowerCase().trim();
+  const q    = (document.getElementById('act-filter')?.value || '').toLowerCase().trim();
   const acts = q ? S.activities.filter(a => a.name.toLowerCase().includes(q)) : S.activities;
   document.getElementById('acts-config-list').innerHTML = acts.length
     ? acts.map(a =>
         `<div class="cfg-row">
           <div class="cfg-name">${a.name}</div>
-          <div class="cfg-meta">${a.type}${a.unit ? ' · ' + a.unit : ''}</div>
-          <div class="cfg-cal">${a.goal || '—'}</div>
+          <div class="cfg-meta">${a.type}${a.unit ? ' · ' + a.unit : ''}${a.goal ? ' · ' + a.goal : ''}</div>
+          <div class="cfg-cal">${a.calories ? a.calories + 'c' : '—'}</div>
           <button class="small danger" onclick="deleteActivity(${_attr(a.name)})">✕</button>
         </div>`
       ).join('')
@@ -749,16 +822,17 @@ function addActivity() {
   const type = document.getElementById('new-act-type').value;
   const unit = document.getElementById('new-act-unit').value.trim();
   const goal = document.getElementById('new-act-goal').value.trim();
+  const cal  = parseFloat(document.getElementById('new-act-calories').value) || 0;
   if (!name) { toast('Name required'); return; }
   google.script.run
     .withSuccessHandler(acts => {
       S.activities = acts; renderActsConfig(); renderActivities();
-      ['new-act-name','new-act-unit','new-act-goal'].forEach(id => document.getElementById(id).value = '');
+      ['new-act-name','new-act-unit','new-act-goal','new-act-calories'].forEach(id => document.getElementById(id).value = '');
       document.getElementById('new-act-type').value = 'checkbox';
       toast('Activity added ✓');
     })
     .withFailureHandler(e => toast('Error: ' + e.message))
-    .saveActivity({ name, type, unit, goal });
+    .saveActivity({ name, type, unit, goal, calories: cal });
 }
 
 function deleteActivity(name) {
