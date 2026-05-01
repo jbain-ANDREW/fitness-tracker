@@ -255,7 +255,7 @@
 
 <h1>Fitness Tracker</h1>
 
-<div class="tabs">
+<div class="tabs" id="main-tabs">
   <div class="tab active" onclick="showTab('log', this)">📋 Log</div>
   <div class="tab" onclick="showTab('history', this)">📅 History</div>
   <div class="tab" onclick="showTab('configure', this)">⚙️ Configure</div>
@@ -330,12 +330,15 @@
 <!-- ══ CONFIGURE ════════════════════════════════════════════════════════════ -->
 <div id="pane-configure" class="pane">
 
-  <!-- Foods -->
-  <div class="card">
-    <div class="lbl">Foods</div>
-    <div id="foods-config-list"></div>
+  <div class="tabs" id="cfg-tabs" style="margin-bottom:16px;">
+    <div class="tab active" onclick="showConfigTab('foods', this)">🍎 Foods</div>
+    <div class="tab" onclick="showConfigTab('acts', this)">🏃 Activities</div>
+  </div>
 
-    <div class="section-divider">
+  <!-- Foods sub-pane -->
+  <div id="cfg-foods">
+
+    <div class="card">
       <div class="section-title">Add Food</div>
       <div class="form-grid">
         <div class="col"><label>Name</label><input type="text" id="new-food-name" placeholder="e.g. Oatmeal"></div>
@@ -347,14 +350,18 @@
       </div>
       <button class="primary" onclick="addFood()">Add Food</button>
     </div>
+
+    <div class="card">
+      <input type="text" id="food-filter" placeholder="Search foods…" oninput="renderFoodsConfig()" style="margin-bottom:10px;">
+      <div id="foods-config-list"></div>
+    </div>
+
   </div>
 
-  <!-- Activities -->
-  <div class="card">
-    <div class="lbl">Activities</div>
-    <div id="acts-config-list"></div>
+  <!-- Activities sub-pane -->
+  <div id="cfg-acts" style="display:none;">
 
-    <div class="section-divider">
+    <div class="card">
       <div class="section-title">Add Activity</div>
       <div class="form-grid">
         <div class="col"><label>Name</label><input type="text" id="new-act-name" placeholder="e.g. Exercise"></div>
@@ -371,6 +378,12 @@
       </div>
       <button class="primary" onclick="addActivity()">Add Activity</button>
     </div>
+
+    <div class="card">
+      <input type="text" id="act-filter" placeholder="Search activities…" oninput="renderActsConfig()" style="margin-bottom:10px;">
+      <div id="acts-config-list"></div>
+    </div>
+
   </div>
 
 </div>
@@ -397,7 +410,7 @@ const S = {
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 function showTab(name, el) {
   document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#main-tabs .tab').forEach(t => t.classList.remove('active'));
   document.getElementById('pane-' + name).classList.add('active');
   el.classList.add('active');
   if (name === 'history')   loadHistoryDate(S.histDate);
@@ -405,6 +418,14 @@ function showTab(name, el) {
     renderConfig();
     if (!S.foods.length && !S.activities.length) loadConfigData();
   }
+}
+
+function showConfigTab(name, el) {
+  document.querySelectorAll('#cfg-tabs .tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('cfg-foods').style.display = 'none';
+  document.getElementById('cfg-acts').style.display  = 'none';
+  document.getElementById('cfg-' + name).style.display = 'block';
+  el.classList.add('active');
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
@@ -636,8 +657,10 @@ function renderConfig() { renderFoodsConfig(); renderActsConfig(); }
 let editingFood = null;
 
 function renderFoodsConfig() {
-  document.getElementById('foods-config-list').innerHTML = S.foods.length
-    ? S.foods.map(f => {
+  const q = (document.getElementById('food-filter')?.value || '').toLowerCase().trim();
+  const foods = q ? S.foods.filter(f => f.name.toLowerCase().includes(q)) : S.foods;
+  document.getElementById('foods-config-list').innerHTML = foods.length
+    ? foods.map(f => {
         if (editingFood === f.name) {
           return `<div class="cfg-row" style="flex-wrap:wrap;gap:8px;padding:12px 0;">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;">
@@ -662,7 +685,7 @@ function renderFoodsConfig() {
           <button class="small danger" onclick="deleteFood(${_attr(f.name)})">✕</button>
         </div>`;
       }).join('')
-    : '<div class="empty">No foods yet.</div>';
+    : q ? '<div class="empty">No matching foods.</div>' : '<div class="empty">No foods yet.</div>';
 }
 
 function saveFoodEdit(originalName) {
@@ -682,8 +705,10 @@ function saveFoodEdit(originalName) {
 }
 
 function renderActsConfig() {
-  document.getElementById('acts-config-list').innerHTML = S.activities.length
-    ? S.activities.map(a =>
+  const q = (document.getElementById('act-filter')?.value || '').toLowerCase().trim();
+  const acts = q ? S.activities.filter(a => a.name.toLowerCase().includes(q)) : S.activities;
+  document.getElementById('acts-config-list').innerHTML = acts.length
+    ? acts.map(a =>
         `<div class="cfg-row">
           <div class="cfg-name">${a.name}</div>
           <div class="cfg-meta">${a.type}${a.unit ? ' · ' + a.unit : ''}</div>
@@ -691,7 +716,7 @@ function renderActsConfig() {
           <button class="small danger" onclick="deleteActivity(${_attr(a.name)})">✕</button>
         </div>`
       ).join('')
-    : '<div class="empty">No activities yet.</div>';
+    : q ? '<div class="empty">No matching activities.</div>' : '<div class="empty">No activities yet.</div>';
 }
 
 function addFood() {
