@@ -1,0 +1,11 @@
+Fitness Tracker — UI / UX Change Log
+=====================================
+
+Add items below. When ready to implement, point Claude to this file.
+
+PENDING
+-------
+
+
+COMPLETED
+---------
