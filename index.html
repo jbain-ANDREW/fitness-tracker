@@ -615,17 +615,52 @@ function renderHistory(date, data) {
 // ── Configure ─────────────────────────────────────────────────────────────────
 function renderConfig() { renderFoodsConfig(); renderActsConfig(); }
 
+let editingFood = null;
+
 function renderFoodsConfig() {
   document.getElementById('foods-config-list').innerHTML = S.foods.length
-    ? S.foods.map(f =>
-        `<div class="cfg-row">
+    ? S.foods.map(f => {
+        if (editingFood === f.name) {
+          return `<div class="cfg-row" style="flex-wrap:wrap;gap:8px;padding:12px 0;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;">
+              <div class="col"><label>Name</label><input type="text" id="ef-name" value="${f.name}"></div>
+              <div class="col"><label>Serving name</label><input type="text" id="ef-sname" value="${f.serving_name}"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;">
+              <div class="col"><label>Size description</label><input type="text" id="ef-ssize" value="${f.serving_size}"></div>
+              <div class="col"><label>Calories / serving</label><input type="number" id="ef-cal" value="${f.calories_per_serving}"></div>
+            </div>
+            <div style="display:flex;gap:8px;width:100%;">
+              <button class="small blue" onclick="saveFoodEdit(${JSON.stringify(f.name)})" style="flex:1;padding:10px;">Save</button>
+              <button class="small grey" onclick="editingFood=null;renderFoodsConfig();" style="flex:1;padding:10px;">Cancel</button>
+            </div>
+          </div>`;
+        }
+        return `<div class="cfg-row">
           <div class="cfg-name">${f.name}</div>
           <div class="cfg-meta">${f.serving_name}${f.serving_size ? ' · ' + f.serving_size : ''}</div>
           <div class="cfg-cal">${f.calories_per_serving} cal</div>
+          <button class="small grey" onclick="editingFood=${JSON.stringify(f.name)};renderFoodsConfig();">Edit</button>
           <button class="small danger" onclick="deleteFood(${JSON.stringify(f.name)})">✕</button>
-        </div>`
-      ).join('')
+        </div>`;
+      }).join('')
     : '<div class="empty">No foods yet.</div>';
+}
+
+function saveFoodEdit(originalName) {
+  const name = document.getElementById('ef-name').value.trim();
+  const sn   = document.getElementById('ef-sname').value.trim();
+  const ss   = document.getElementById('ef-ssize').value.trim();
+  const cal  = parseFloat(document.getElementById('ef-cal').value);
+  if (!name) { toast('Name required'); return; }
+  if (!cal)  { toast('Calories required'); return; }
+  google.script.run
+    .withSuccessHandler(foods => {
+      S.foods = foods; editingFood = null;
+      renderFoodsConfig(); renderFood(); toast('Food updated ✓');
+    })
+    .withFailureHandler(e => toast('Error: ' + e.message))
+    .saveFood({ name, serving_name: sn, serving_size: ss, calories_per_serving: cal, _originalName: originalName });
 }
 
 function renderActsConfig() {
