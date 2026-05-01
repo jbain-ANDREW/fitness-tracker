@@ -58,22 +58,26 @@ function initFitness() {
 
 // ── Weight ────────────────────────────────────────────────────────────────────
 
-function logWeight(weight) {
-  _sheet(WEIGHT_SHEET).appendRow([_ts(), parseFloat(weight)]);
-  return getTodayWeight();
+function logWeight(weight, date) {
+  const d  = date || _today();
+  const ts = d === _today() ? _ts() : d + ' 12:00:00';
+  _sheet(WEIGHT_SHEET).appendRow([ts, parseFloat(weight)]);
+  return getDateWeight(d);
 }
 
-function getTodayWeight() {
-  const today = _today();
-  const rows  = _sheet(WEIGHT_SHEET).getDataRange().getValues().slice(1);
-  const todayRows = rows.filter(r => String(r[0]).startsWith(today) && r[1]);
-  const values = todayRows.map(r => parseFloat(r[1]));
-  const avg = values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
+function getDateWeight(date) {
+  const d    = date || _today();
+  const rows = _sheet(WEIGHT_SHEET).getDataRange().getValues().slice(1);
+  const hits = rows.filter(r => String(r[0]).startsWith(d) && r[1]);
+  const vals = hits.map(r => parseFloat(r[1]));
+  const avg  = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
   return {
-    entries: todayRows.map(r => ({ time: String(r[0]), weight: parseFloat(r[1]) })),
+    entries: hits.map(r => ({ time: String(r[0]), weight: parseFloat(r[1]) })),
     average: avg ? Math.round(avg * 10) / 10 : null
   };
 }
+
+function getTodayWeight() { return getDateWeight(_today()); }
 
 function getWeightHistory(days) {
   days = parseInt(days) || 30;
@@ -134,28 +138,32 @@ function deleteFood(name) {
 
 // ── Food log ──────────────────────────────────────────────────────────────────
 
-function logFood(foodName, numServings, caloriesTotal) {
-  _sheet(FOOD_LOG_SHEET).appendRow([_ts(), _today(), foodName, parseFloat(numServings), parseFloat(caloriesTotal)]);
-  return getTodayFood();
+function logFood(foodName, numServings, caloriesTotal, date) {
+  const d  = date || _today();
+  const ts = d === _today() ? _ts() : d + ' 12:00:00';
+  _sheet(FOOD_LOG_SHEET).appendRow([ts, d, foodName, parseFloat(numServings), parseFloat(caloriesTotal)]);
+  return getDateFood(d);
 }
 
-function deleteFoodEntry(timestamp) {
+function deleteFoodEntry(timestamp, date) {
   const sheet = _sheet(FOOD_LOG_SHEET);
   const rows  = sheet.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
     if (String(rows[i][0]) === String(timestamp)) { sheet.deleteRow(i + 1); break; }
   }
-  return getTodayFood();
+  return getDateFood(date || _today());
 }
 
-function getTodayFood() {
-  const today   = _today();
+function getDateFood(date) {
+  const d       = date || _today();
   const rows    = _sheet(FOOD_LOG_SHEET).getDataRange().getValues().slice(1);
-  const entries = rows.filter(r => r[1] === today && r[2]).map(r => ({
+  const entries = rows.filter(r => r[1] === d && r[2]).map(r => ({
     timestamp: r[0], food_name: r[2], num_servings: parseFloat(r[3]), calories: parseFloat(r[4])
   }));
   return { entries, total_calories: Math.round(entries.reduce((s, e) => s + (e.calories || 0), 0)) };
 }
+
+function getTodayFood() { return getDateFood(_today()); }
 
 function getFoodLog(days) {
   days = parseInt(days) || 7;
@@ -207,14 +215,14 @@ function deleteActivity(name) {
 
 // ── Activity log ──────────────────────────────────────────────────────────────
 
-function logActivities(entries) {
-  const today = _today();
+function logActivities(entries, date) {
+  const d     = date || _today();
   const sheet = _sheet(ACT_LOG_SHEET);
   const rows  = sheet.getDataRange().getValues();
   entries.forEach(entry => {
     let found = false;
     for (let i = 1; i < rows.length; i++) {
-      if (rows[i][0] === today && rows[i][1] === entry.name) {
+      if (rows[i][0] === d && rows[i][1] === entry.name) {
         sheet.getRange(i + 1, 3).setValue(entry.value);
         rows[i][2] = entry.value;
         found = true;
@@ -222,20 +230,22 @@ function logActivities(entries) {
       }
     }
     if (!found) {
-      sheet.appendRow([today, entry.name, entry.value]);
-      rows.push([today, entry.name, entry.value]);
+      sheet.appendRow([d, entry.name, entry.value]);
+      rows.push([d, entry.name, entry.value]);
     }
   });
-  return getTodayActivities();
+  return getDateActivities(d);
 }
 
-function getTodayActivities() {
-  const today  = _today();
-  const rows   = _sheet(ACT_LOG_SHEET).getDataRange().getValues().slice(1);
+function getDateActivities(date) {
+  const d    = date || _today();
+  const rows = _sheet(ACT_LOG_SHEET).getDataRange().getValues().slice(1);
   const result = {};
-  rows.filter(r => r[0] === today && r[1]).forEach(r => { result[r[1]] = r[2]; });
+  rows.filter(r => r[0] === d && r[1]).forEach(r => { result[r[1]] = r[2]; });
   return result;
 }
+
+function getTodayActivities() { return getDateActivities(_today()); }
 
 function getActivityLog(days) {
   days = parseInt(days) || 7;
@@ -252,16 +262,19 @@ function getActivityLog(days) {
 
 // ── Combined loaders ──────────────────────────────────────────────────────────
 
-function getTodaySummary() {
+function getDateSummary(date) {
+  const d = date || _today();
   return {
-    date:              _today(),
-    weight:            getTodayWeight(),
-    food:              getTodayFood(),
-    activities:        getTodayActivities(),
+    date:              d,
+    weight:            getDateWeight(d),
+    food:              getDateFood(d),
+    activities:        getDateActivities(d),
     foods_config:      getFoods(),
     activities_config: getActivities()
   };
 }
+
+function getTodaySummary() { return getDateSummary(_today()); }
 
 function getHistoryPage(days) {
   return {

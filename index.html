@@ -264,6 +264,12 @@
 <!-- ══ LOG ══════════════════════════════════════════════════════════════════ -->
 <div id="pane-log" class="pane active">
 
+  <!-- Date picker -->
+  <div class="card" style="margin-bottom:12px;">
+    <label>Logging for</label>
+    <input type="date" id="log-date" onchange="changeLogDate()">
+  </div>
+
   <!-- Weight -->
   <div class="card">
     <div style="text-align:center;margin-bottom:14px;">
@@ -373,13 +379,15 @@
 
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
+const TODAY = new Date().toISOString().slice(0, 10);
 const S = {
   foods:      [],
   activities: [],
   wt:         { entries: [], average: null },
   food:       { entries: [], total_calories: 0 },
   acts:       {},
-  histDate:   new Date().toISOString().slice(0, 10)
+  logDate:    TODAY,
+  histDate:   TODAY
 };
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
@@ -402,18 +410,30 @@ function toast(msg) {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 window.addEventListener('load', () => {
+  document.getElementById('log-date').value = TODAY;
+  loadLogDate(TODAY);
+});
+
+function loadLogDate(date) {
   google.script.run
     .withSuccessHandler(d => {
       S.foods      = d.foods_config      || [];
       S.activities = d.activities_config || [];
-      S.wt         = d.weight  || { entries: [], average: null };
-      S.food       = d.food    || { entries: [], total_calories: 0 };
+      S.wt         = d.weight     || { entries: [], average: null };
+      S.food       = d.food       || { entries: [], total_calories: 0 };
       S.acts       = d.activities || {};
       renderWeight(); renderFood(); renderActivities();
     })
     .withFailureHandler(err => toast('Load error: ' + err.message))
-    .getTodaySummary();
-});
+    .getDateSummary(date);
+}
+
+function changeLogDate() {
+  const d = document.getElementById('log-date').value;
+  if (!d) return;
+  S.logDate = d;
+  loadLogDate(d);
+}
 
 // ── Weight ────────────────────────────────────────────────────────────────────
 function renderWeight() {
@@ -439,7 +459,7 @@ function logWeight() {
   google.script.run
     .withSuccessHandler(d => { S.wt = d; renderWeight(); document.getElementById('weight-input').value = ''; toast('Weight logged ✓'); })
     .withFailureHandler(e => toast('Error: ' + e.message))
-    .logWeight(v);
+    .logWeight(v, S.logDate);
 }
 
 // ── Food ──────────────────────────────────────────────────────────────────────
@@ -490,14 +510,14 @@ function logFood() {
   google.script.run
     .withSuccessHandler(d => { S.food = d; renderFoodEntries(); document.getElementById('food-servings').value = '1'; updateCalPreview(); toast('Food logged ✓'); })
     .withFailureHandler(e => toast('Error: ' + e.message))
-    .logFood(sel.value, srv, cal);
+    .logFood(sel.value, srv, cal, S.logDate);
 }
 
 function deleteFoodEntry(ts) {
   google.script.run
     .withSuccessHandler(d => { S.food = d; renderFoodEntries(); toast('Removed'); })
     .withFailureHandler(e => toast('Error: ' + e.message))
-    .deleteFoodEntry(ts);
+    .deleteFoodEntry(ts, S.logDate);
 }
 
 // ── Activities ────────────────────────────────────────────────────────────────
@@ -533,7 +553,7 @@ function saveActivities() {
   google.script.run
     .withSuccessHandler(d => { S.acts = d; renderActivities(); toast('Saved ✓'); })
     .withFailureHandler(e => toast('Error: ' + e.message))
-    .logActivities(entries);
+    .logActivities(entries, S.logDate);
 }
 
 // ── History ───────────────────────────────────────────────────────────────────
