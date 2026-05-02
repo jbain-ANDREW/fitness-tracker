@@ -1,0 +1,4 @@
+the logging page has some good and some things that need to be changed
+1) weight logging works well
+2) activity logging needs to change. activities should be handled like food, with many of them allowed and being summed up. The log button for activities should be like the food one
+3) The summing needs to be updated to deal with 
