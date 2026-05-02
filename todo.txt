@@ -5,7 +5,13 @@ Add items below. When ready to implement, point Claude to this file.
 
 PENDING
 -------
+On log page, the weight is implemented well. It is a single vbalue and appears when a date is switched.
 
+Food and activity log look reasonable, but teh subtraction is not working well when the value
+ is negativbe. 
+
+Addituonally, the activity is being handled like the weight - a single thing that happnes on a day. 
+However, I want activities treated like foor 
 
 COMPLETED
 ---------
