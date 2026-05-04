@@ -62,9 +62,9 @@ function initFitness() {
 
   ensure(WEIGHT_SHEET,   ['date', 'weight_lbs']);
   ensure(FOODS_SHEET,    ['name', 'serving_name', 'serving_size', 'calories_per_serving']);
-  ensure(FOOD_LOG_SHEET, ['timestamp', 'date', 'food_name', 'num_servings', 'calories_total']);
-  ensure(ACT_SHEET,      ['name', 'type', 'unit', 'goal', 'calories']);
-  ensure(ACT_LOG_SHEET,  ['date', 'activity_name', 'value']);
+  ensure(FOOD_LOG_SHEET, ['timestamp', 'date', 'food_name', 'num_servings', 'calories_total', 'meal']);
+  ensure(ACT_SHEET,      ['name', 'type', 'unit', 'goal', 'calories', 'cal_weight1', 'cal_per_unit1', 'cal_weight2', 'cal_per_unit2']);
+  ensure(ACT_LOG_SHEET,  ['timestamp', 'date', 'activity_name', 'value', 'calories_burned']);
 
   return 'Fitness Tracker initialized. Spreadsheet: ' + ss.getUrl();
 }
@@ -142,9 +142,9 @@ function deleteFood(name) {
 
 // ── Food log ──────────────────────────────────────────────────────────────────
 
-function logFood(foodName, numServings, caloriesTotal, date) {
+function logFood(foodName, numServings, caloriesTotal, date, meal) {
   const d = date || _today();
-  _sheet(FOOD_LOG_SHEET).appendRow([_ts(), d, foodName, parseFloat(numServings), parseFloat(caloriesTotal)]);
+  _sheet(FOOD_LOG_SHEET).appendRow([_ts(), d, foodName, parseFloat(numServings), parseFloat(caloriesTotal), meal || '']);
   return getDateFood(d);
 }
 
@@ -161,7 +161,7 @@ function getDateFood(date) {
   const d       = date || _today();
   const rows    = _sheet(FOOD_LOG_SHEET).getDataRange().getValues().slice(1);
   const entries = rows.filter(r => _dateStr(r[1]) === d && r[2]).map(r => ({
-    timestamp: _tsStr(r[0]), food_name: r[2], num_servings: parseFloat(r[3]), calories: parseFloat(r[4])
+    timestamp: _tsStr(r[0]), food_name: r[2], num_servings: parseFloat(r[3]), calories: parseFloat(r[4]), meal: r[5] || ''
   }));
   return { entries, total_calories: Math.round(entries.reduce((s, e) => s + (e.calories || 0), 0)) };
 }
@@ -177,7 +177,7 @@ function getFoodLog(days) {
   rows.filter(r => r[1] && new Date(_dateStr(r[1]) + 'T12:00:00') >= cutoff).forEach(r => {
     const d = _dateStr(r[1]);
     if (!result[d]) result[d] = { entries: [], total_calories: 0 };
-    result[d].entries.push({ timestamp: _tsStr(r[0]), food_name: r[2], num_servings: parseFloat(r[3]), calories: parseFloat(r[4]) });
+    result[d].entries.push({ timestamp: _tsStr(r[0]), food_name: r[2], num_servings: parseFloat(r[3]), calories: parseFloat(r[4]), meal: r[5] || '' });
     result[d].total_calories += parseFloat(r[4]) || 0;
   });
   Object.values(result).forEach(day => { day.total_calories = Math.round(day.total_calories); });
@@ -190,7 +190,11 @@ function getActivities() {
   const rows = _sheet(ACT_SHEET).getDataRange().getValues().slice(1);
   return rows.filter(r => r[0]).map(r => ({
     name: r[0], type: r[1] || 'checkbox', unit: r[2] || '', goal: r[3] || '',
-    calories: parseFloat(r[4]) || 0
+    calories:      parseFloat(r[4]) || 0,
+    cal_weight1:   parseFloat(r[5]) || 0,
+    cal_per_unit1: parseFloat(r[6]) || 0,
+    cal_weight2:   parseFloat(r[7]) || 0,
+    cal_per_unit2: parseFloat(r[8]) || 0
   }));
 }
 
@@ -198,14 +202,21 @@ function saveActivity(data) {
   const sheet = _sheet(ACT_SHEET);
   const rows  = sheet.getDataRange().getValues();
   const match = data._originalName || data.name;
-  const cal   = parseFloat(data.calories) || 0;
+  const row   = [
+    data.name, data.type || 'checkbox', data.unit || '', data.goal || '',
+    parseFloat(data.calories)      || 0,
+    parseFloat(data.cal_weight1)   || 0,
+    parseFloat(data.cal_per_unit1) || 0,
+    parseFloat(data.cal_weight2)   || 0,
+    parseFloat(data.cal_per_unit2) || 0
+  ];
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][0] === match) {
-      sheet.getRange(i + 1, 1, 1, 5).setValues([[data.name, data.type, data.unit, data.goal, cal]]);
+      sheet.getRange(i + 1, 1, 1, 9).setValues([row]);
       return getActivities();
     }
   }
-  sheet.appendRow([data.name, data.type || 'checkbox', data.unit || '', data.goal || '', cal]);
+  sheet.appendRow(row);
   return getActivities();
 }
 
@@ -219,35 +230,37 @@ function deleteActivity(name) {
 }
 
 // ── Activity log ──────────────────────────────────────────────────────────────
+// Schema: [timestamp, date, activity_name, value, calories_burned]
 
-function logActivities(entries, date) {
-  const d     = date || _today();
+function logActivity(actName, value, caloriesBurned, date) {
+  const d = date || _today();
+  _sheet(ACT_LOG_SHEET).appendRow([_ts(), d, actName, value, parseFloat(caloriesBurned) || 0]);
+  return getDateActivities(d);
+}
+
+function deleteActivityEntry(timestamp, date) {
   const sheet = _sheet(ACT_LOG_SHEET);
   const rows  = sheet.getDataRange().getValues();
-  entries.forEach(entry => {
-    let found = false;
-    for (let i = 1; i < rows.length; i++) {
-      if (_dateStr(rows[i][0]) === d && rows[i][1] === entry.name) {
-        sheet.getRange(i + 1, 3).setValue(entry.value);
-        rows[i][2] = entry.value;
-        found = true;
-        break;
-      }
-    }
-    if (!found) {
-      sheet.appendRow([d, entry.name, entry.value]);
-      rows.push([d, entry.name, entry.value]);
-    }
-  });
-  return getDateActivities(d);
+  for (let i = 1; i < rows.length; i++) {
+    if (_tsStr(rows[i][0]) === String(timestamp)) { sheet.deleteRow(i + 1); break; }
+  }
+  return getDateActivities(date || _today());
 }
 
 function getDateActivities(date) {
   const d    = date || _today();
   const rows = _sheet(ACT_LOG_SHEET).getDataRange().getValues().slice(1);
-  const result = {};
-  rows.filter(r => _dateStr(r[0]) === d && r[1]).forEach(r => { result[r[1]] = r[2]; });
-  return result;
+  return rows
+    .filter(r => {
+      const ts = _tsStr(r[0]);
+      return ts.length > 10 && _dateStr(r[1]) === d && r[2];
+    })
+    .map(r => ({
+      timestamp:       _tsStr(r[0]),
+      activity_name:   String(r[2]),
+      value:           r[3],
+      calories_burned: parseFloat(r[4]) || 0
+    }));
 }
 
 function getTodayActivities() { return getDateActivities(_today()); }
@@ -258,25 +271,89 @@ function getActivityLog(days) {
   cutoff.setDate(cutoff.getDate() - days);
   const rows   = _sheet(ACT_LOG_SHEET).getDataRange().getValues().slice(1);
   const result = {};
-  rows.filter(r => r[0] && new Date(_dateStr(r[0]) + 'T12:00:00') >= cutoff).forEach(r => {
-    const d = _dateStr(r[0]);
-    if (!result[d]) result[d] = {};
-    result[d][r[1]] = r[2];
-  });
+  rows
+    .filter(r => {
+      const ts = _tsStr(r[0]);
+      return ts.length > 10 && r[1] && new Date(_dateStr(r[1]) + 'T12:00:00') >= cutoff;
+    })
+    .forEach(r => {
+      const d = _dateStr(r[1]);
+      if (!result[d]) result[d] = [];
+      result[d].push({
+        timestamp:       _tsStr(r[0]),
+        activity_name:   String(r[2]),
+        value:           r[3],
+        calories_burned: parseFloat(r[4]) || 0
+      });
+    });
   return result;
+}
+
+// ── Daily calorie goal ────────────────────────────────────────────────────────
+
+function getGoal() {
+  const v = PropertiesService.getScriptProperties().getProperty('DAILY_CALORIE_GOAL');
+  return v ? parseInt(v) : 0;
+}
+
+function setGoal(n) {
+  PropertiesService.getScriptProperties().setProperty('DAILY_CALORIE_GOAL', String(parseInt(n) || 0));
+  return getGoal();
+}
+
+// ── BMR / TDEE settings ───────────────────────────────────────────────────────
+
+function getBMRSettings() {
+  const p = PropertiesService.getScriptProperties();
+  return {
+    weight1:     parseFloat(p.getProperty('BMR_WEIGHT1'))     || 0,
+    tdee1:       parseFloat(p.getProperty('BMR_TDEE1'))       || 0,
+    weight2:     parseFloat(p.getProperty('BMR_WEIGHT2'))     || 0,
+    tdee2:       parseFloat(p.getProperty('BMR_TDEE2'))       || 0,
+    baseSteps:   parseInt(p.getProperty('BMR_BASE_STEPS'))    || 0,
+    goalLbsWeek: parseFloat(p.getProperty('GOAL_LBS_WEEK'))   || 0
+  };
+}
+
+function setBMRSettings(data) {
+  PropertiesService.getScriptProperties().setProperties({
+    BMR_WEIGHT1:    String(parseFloat(data.weight1)     || 0),
+    BMR_TDEE1:      String(parseFloat(data.tdee1)       || 0),
+    BMR_WEIGHT2:    String(parseFloat(data.weight2)     || 0),
+    BMR_TDEE2:      String(parseFloat(data.tdee2)       || 0),
+    BMR_BASE_STEPS: String(parseInt(data.baseSteps)     || 0),
+    GOAL_LBS_WEEK:  String(parseFloat(data.goalLbsWeek) || 0)
+  });
+  return getBMRSettings();
+}
+
+function _computeTDEE(weight, s) {
+  if (!s.weight1 || !s.tdee1 || !s.weight2 || !s.tdee2 || s.weight1 === s.weight2) return 0;
+  const slope = (s.tdee2 - s.tdee1) / (s.weight2 - s.weight1);
+  return Math.round(s.tdee1 + slope * (weight - s.weight1));
 }
 
 // ── Combined loaders ──────────────────────────────────────────────────────────
 
 function getDateSummary(date) {
-  const d = date || _today();
+  const d          = date || _today();
+  const weightData = getDateWeight(d);
+  const bmr        = getBMRSettings();
+  const tdee       = (weightData.weight && bmr.weight1 && bmr.weight2)
+    ? _computeTDEE(weightData.weight, bmr) : 0;
+  const deficit    = Math.round((bmr.goalLbsWeek || 0) * 3500 / 7);
   return {
     date,
-    weight:            getDateWeight(d),
+    weight:            weightData,
     food:              getDateFood(d),
     activities:        getDateActivities(d),
     foods_config:      getFoods(),
-    activities_config: getActivities()
+    activities_config: getActivities(),
+    goal:              getGoal(),
+    sheet_url:         _ss().getUrl(),
+    bmr:               bmr,
+    tdee:              tdee,
+    cal_target:        tdee ? tdee - deficit : getGoal()
   };
 }
 
@@ -287,6 +364,7 @@ function getHistoryPage(days) {
     weight:            getWeightHistory(days),
     food:              getFoodLog(days),
     activities:        getActivityLog(days),
-    activities_config: getActivities()
+    activities_config: getActivities(),
+    goal:              getGoal()
   };
 }

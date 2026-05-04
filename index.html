@@ -111,6 +111,21 @@
 
     .section-divider { margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e5ea; }
     .section-title { font-size: 13px; font-weight: 600; color: #6e6e73; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 12px; }
+
+    .meal-btn-row { display: flex; gap: 6px; margin-top: 10px; }
+    .meal-btn {
+      flex: 1; padding: 10px 4px; font-size: 13px; font-weight: 600;
+      background: #007aff; color: white; border: none; border-radius: 10px; cursor: pointer;
+    }
+    .meal-btn:disabled { background: #b0c4de; cursor: default; }
+    .meal-section-header {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 12px; font-weight: 700; color: #6e6e73;
+      text-transform: uppercase; letter-spacing: 0.4px;
+      padding: 10px 0 4px; border-top: 1px solid #d1d1d6; margin-top: 4px;
+    }
+    .meal-section-header:first-of-type { border-top: none; margin-top: 8px; }
+    .meal-subtotal { font-size: 12px; font-weight: 600; color: #ff9500; }
     .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
     .form-grid .col > input { margin-top: 0; }
 
@@ -132,7 +147,10 @@
 </head>
 <body>
 
-<h1>Fitness Tracker</h1>
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+  <h1 style="margin-bottom:0;">Fitness Tracker</h1>
+  <a id="sheet-link" href="#" target="_blank" style="font-size:13px;color:#007aff;text-decoration:none;display:none;">📊 Sheet ↗</a>
+</div>
 
 <div class="tabs" id="main-tabs">
   <div class="tab active" onclick="showTab('log', this)">📋 Log</div>
@@ -145,6 +163,7 @@
 
   <div class="card" style="margin-bottom:12px;">
     <label>Logging for</label>
+    <div id="log-day-display" style="font-size:20px;font-weight:600;color:#1c1c1e;margin-bottom:8px;"></div>
     <input type="date" id="log-date" onchange="changeLogDate()">
   </div>
 
@@ -162,22 +181,8 @@
     </div>
   </div>
 
-  <!-- Food -->
-  <div class="card">
-    <label>Food</label>
-    <select id="food-select" onchange="updateCalPreview()" style="margin-bottom:12px;"></select>
-    <div class="row" style="align-items:center;">
-      <div class="col">
-        <label style="margin-bottom:4px;">Servings</label>
-        <input type="number" id="food-servings" value="1" min="0.25" step="0.25"
-               oninput="updateCalPreview()" onkeydown="if(event.key==='Enter')logFood()">
-      </div>
-      <div style="text-align:center;flex:1;">
-        <div class="lbl">Calories</div>
-        <div style="font-size:26px;font-weight:600;color:#ff9500;" id="cal-preview">—</div>
-      </div>
-      <button class="small blue" onclick="logFood()" style="padding:10px 18px;font-size:16px;">Log</button>
-    </div>
+  <!-- Calorie summary -->
+  <div class="card" id="cal-summary-card" style="margin-bottom:12px;display:none;">
     <div class="total-row" id="food-total-row" style="display:none;">
       <span>Food</span>
       <span class="cal-badge" id="food-total-cal"></span>
@@ -190,14 +195,48 @@
       <span style="font-weight:700;">Net</span>
       <span class="cal-badge" style="background:#ff3b30;" id="food-net-cal"></span>
     </div>
+    <div class="total-row" id="food-target-row" style="display:none;margin-top:4px;opacity:0.65;">
+      <span>Target</span>
+      <span id="food-target-cal" style="font-size:14px;color:#6e6e73;"></span>
+    </div>
+  </div>
+
+  <!-- Food -->
+  <div class="card">
+    <label>Food</label>
+    <select id="food-select" onchange="updateCalPreview()" style="margin-bottom:12px;"></select>
+    <div class="row" style="align-items:center;margin-bottom:0;">
+      <div class="col">
+        <label style="margin-bottom:4px;">Servings</label>
+        <input type="number" id="food-servings" value="1" min="0.25" step="0.25"
+               oninput="updateCalPreview()">
+      </div>
+      <div style="text-align:center;flex:1;">
+        <div class="lbl">Calories</div>
+        <div style="font-size:26px;font-weight:600;color:#ff9500;" id="cal-preview">—</div>
+      </div>
+    </div>
+    <div class="meal-btn-row">
+      <button class="meal-btn" onclick="logFood('breakfast')">🌅 Breakfast</button>
+      <button class="meal-btn" onclick="logFood('lunch')">☀️ Lunch</button>
+      <button class="meal-btn" onclick="logFood('dinner')">🌙 Dinner</button>
+    </div>
     <ul class="entry-list" id="food-entries"></ul>
   </div>
 
   <!-- Activities -->
   <div class="card">
-    <div class="lbl" style="margin-bottom:12px;">Activities</div>
-    <div id="activities-list"></div>
-    <button class="primary" onclick="saveActivities()" style="margin-top:14px;">Save Activities</button>
+    <label>Activity</label>
+    <select id="act-select" onchange="updateActPreview()" style="margin-bottom:12px;"></select>
+    <div class="row" style="align-items:center;">
+      <div class="col" id="act-value-wrap" style="flex:2;"></div>
+      <div style="text-align:center;flex:1;">
+        <div class="lbl">Cal burn</div>
+        <div style="font-size:26px;font-weight:600;color:#34c759;" id="act-cal-preview">—</div>
+      </div>
+      <button class="small blue" onclick="logActivity()" style="padding:10px 18px;font-size:16px;">Log</button>
+    </div>
+    <ul class="entry-list" id="act-entries"></ul>
   </div>
 
 </div>
@@ -234,7 +273,7 @@
   <!-- Calories sub-pane -->
   <div id="hist-calories" style="display:none;">
     <div class="card">
-      <div style="font-size:13px;color:#6e6e73;margin-bottom:12px;">Last 7 days · blue = food · <span style="color:#34c759;">green</span> = activity burn · label = net</div>
+      <div style="font-size:13px;color:#6e6e73;margin-bottom:12px;">Last 7 days · <span style="color:#ff9500;">■</span> food &nbsp;·&nbsp; <span style="color:#34c759;">■</span> net (under goal) &nbsp;·&nbsp; <span style="color:#ff3b30;">■</span> net (over goal)</div>
       <div id="cal-chart-wrap"><div class="empty">Loading…</div></div>
     </div>
   </div>
@@ -252,6 +291,7 @@
   <div class="tabs" id="cfg-tabs" style="margin-bottom:16px;">
     <div class="tab active" onclick="showConfigTab('foods', this)">🍎 Foods</div>
     <div class="tab" onclick="showConfigTab('acts', this)">🏃 Activities</div>
+    <div class="tab" onclick="showConfigTab('weight', this)">⚖️ Weight</div>
   </div>
 
   <!-- Foods sub-pane -->
@@ -278,30 +318,105 @@
   <div id="cfg-acts" style="display:none;">
     <div class="card">
       <div class="section-title">Add Activity</div>
+
       <div class="form-grid">
-        <div class="col"><label>Name</label><input type="text" id="new-act-name" placeholder="e.g. Exercise"></div>
+        <div class="col"><label>Name</label><input type="text" id="new-act-name" placeholder="e.g. Walking"></div>
         <div class="col"><label>Type</label>
-          <select id="new-act-type">
+          <select id="new-act-type" onchange="toggleActCalForm()">
             <option value="checkbox">Checkbox (yes/no)</option>
             <option value="number">Number</option>
           </select>
         </div>
       </div>
       <div class="form-grid">
-        <div class="col"><label>Unit</label><input type="text" id="new-act-unit" placeholder="e.g. minutes"></div>
-        <div class="col"><label>Goal</label><input type="text" id="new-act-goal" placeholder="e.g. 30"></div>
+        <div class="col"><label>Unit</label><input type="text" id="new-act-unit" placeholder="e.g. steps"></div>
+        <div class="col"><label>Goal</label><input type="text" id="new-act-goal" placeholder="e.g. 5000"></div>
       </div>
-      <div class="form-grid">
-        <div class="col"><label>Calories burned</label><input type="number" id="new-act-calories" placeholder="e.g. 300"></div>
-        <div class="col" style="justify-content:flex-end;padding-bottom:6px;">
-          <span style="font-size:12px;color:#8e8e93;line-height:1.4;">Checkbox: total per session.<br>Number: per unit.</span>
+
+      <!-- Fixed calories (default) -->
+      <div id="new-act-cal-fixed">
+        <div class="form-grid">
+          <div class="col"><label>Calories burned</label><input type="number" id="new-act-calories" placeholder="e.g. 300"></div>
+          <div class="col" style="justify-content:flex-end;padding-bottom:6px;">
+            <span style="font-size:12px;color:#8e8e93;line-height:1.4;">Checkbox: total per session.<br>Number: per unit.</span>
+          </div>
         </div>
       </div>
+
+      <!-- Weight-dependent toggle (number type only) -->
+      <div id="new-act-wtdep-wrap" style="display:none;margin-bottom:12px;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;">
+          <input type="checkbox" id="new-act-wtdep" onchange="toggleActCalForm()" style="width:18px;height:18px;">
+          Weight-dependent calories per unit
+        </label>
+      </div>
+
+      <!-- Calibration inputs -->
+      <div id="new-act-cal-wtdep" style="display:none;">
+        <div class="form-grid" style="margin-bottom:8px;">
+          <div class="col"><label>Point 1 weight (lbs)</label><input type="number" id="new-act-cw1" placeholder="e.g. 200" min="50" step="0.5"></div>
+          <div class="col"><label>Cal / unit at pt 1</label><input type="number" id="new-act-cpu1" placeholder="e.g. 0.32" step="0.001"></div>
+        </div>
+        <div class="form-grid" style="margin-bottom:14px;">
+          <div class="col"><label>Point 2 weight (lbs)</label><input type="number" id="new-act-cw2" placeholder="e.g. 180" min="50" step="0.5"></div>
+          <div class="col"><label>Cal / unit at pt 2</label><input type="number" id="new-act-cpu2" placeholder="e.g. 0.29" step="0.001"></div>
+        </div>
+      </div>
+
       <button class="primary" onclick="addActivity()">Add Activity</button>
     </div>
     <div class="card">
       <input type="text" id="act-filter" placeholder="Search activities…" oninput="renderActsConfig()" style="margin-bottom:10px;">
       <div id="acts-config-list"></div>
+    </div>
+  </div>
+
+  <!-- Weight sub-pane -->
+  <div id="cfg-weight" style="display:none;">
+    <div class="card">
+      <div class="section-title" style="margin-bottom:14px;">BMR Calibration</div>
+      <label style="margin-bottom:10px;">Two weight/TDEE reference points for linear interpolation</label>
+      <div class="form-grid" style="margin-bottom:8px;">
+        <div class="col">
+          <label>Point 1 weight (lbs)</label>
+          <input type="number" id="bmr-w1" placeholder="e.g. 200" min="50" step="0.5" oninput="updateBMRPreview()">
+        </div>
+        <div class="col">
+          <label>Point 1 TDEE (cal/day)</label>
+          <input type="number" id="bmr-t1" placeholder="e.g. 2800" min="0" step="50" oninput="updateBMRPreview()">
+        </div>
+      </div>
+      <div class="form-grid" style="margin-bottom:14px;">
+        <div class="col">
+          <label>Point 2 weight (lbs)</label>
+          <input type="number" id="bmr-w2" placeholder="e.g. 180" min="50" step="0.5" oninput="updateBMRPreview()">
+        </div>
+        <div class="col">
+          <label>Point 2 TDEE (cal/day)</label>
+          <input type="number" id="bmr-t2" placeholder="e.g. 2650" min="0" step="50" oninput="updateBMRPreview()">
+        </div>
+      </div>
+
+      <label>Baseline steps assumed by these TDEE values</label>
+      <input type="number" id="bmr-steps" placeholder="e.g. 3000" min="0" step="500" style="margin-bottom:14px;" oninput="updateBMRPreview()">
+
+      <label>Weight loss goal (lbs/week)</label>
+      <input type="number" id="bmr-goal" placeholder="e.g. 1.0" min="0" max="3" step="0.25" style="margin-bottom:14px;" oninput="updateBMRPreview()">
+
+      <div id="bmr-preview" style="display:none;background:#f2f2f7;border-radius:10px;padding:12px;margin-bottom:14px;font-size:14px;line-height:1.8;color:#3a3a3c;"></div>
+
+      <button class="primary" onclick="saveBMRSettings()">Save</button>
+    </div>
+
+    <div class="card">
+      <div class="section-title" style="margin-bottom:10px;">Manual Override</div>
+      <div style="font-size:13px;color:#8e8e93;margin-bottom:10px;">Fallback when BMR calibration is not set.</div>
+      <label>Daily Calorie Goal</label>
+      <div class="row" style="align-items:center;margin-bottom:0;">
+        <input type="number" id="cal-goal-input" placeholder="e.g. 2000" min="0" step="50"
+               onkeydown="if(event.key==='Enter')saveGoal()">
+        <button class="small blue" onclick="saveGoal()" style="padding:10px 18px;font-size:16px;">Save</button>
+      </div>
     </div>
   </div>
 
@@ -314,17 +429,31 @@
 function _attr(s) { return JSON.stringify(s).replace(/"/g, '&quot;'); }
 
 // ── State ─────────────────────────────────────────────────────────────────────
-const TODAY = new Date().toISOString().slice(0, 10);
+const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 const S = {
   foods:      [],
   activities: [],
   wt:         { weight: null },
   food:       { entries: [], total_calories: 0 },
-  acts:       {},
+  acts:       [],
   logDate:    TODAY,
   histData:   null,
-  histTab:    'weight'
+  histTab:    'weight',
+  goal:       0,
+  sheet_url:  '',
+  bmr:        {},
+  tdee:       0,
+  cal_target: 0
 };
+
+// ── Date display ─────────────────────────────────────────────────────────────
+function updateDayDisplay(date) {
+  const el = document.getElementById('log-day-display');
+  if (!el) return;
+  el.textContent = new Date(date + 'T12:00:00').toLocaleDateString('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric'
+  });
+}
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 function showTab(name, el) {
@@ -344,9 +473,9 @@ function showTab(name, el) {
 
 function showConfigTab(name, el) {
   document.querySelectorAll('#cfg-tabs .tab').forEach(t => t.classList.remove('active'));
-  document.getElementById('cfg-foods').style.display = 'none';
-  document.getElementById('cfg-acts').style.display  = 'none';
-  document.getElementById('cfg-' + name).style.display = 'block';
+  ['foods', 'acts', 'weight'].forEach(n => {
+    document.getElementById('cfg-' + n).style.display = n === name ? 'block' : 'none';
+  });
   el.classList.add('active');
 }
 
@@ -378,6 +507,7 @@ function toast(msg) {
 // ── Init ──────────────────────────────────────────────────────────────────────
 window.addEventListener('load', () => {
   document.getElementById('log-date').value = TODAY;
+  updateDayDisplay(TODAY);
   loadLogDate(TODAY);
 });
 
@@ -388,7 +518,16 @@ function loadLogDate(date) {
       S.activities = d.activities_config || [];
       S.wt         = d.weight   || { weight: null };
       S.food       = d.food     || { entries: [], total_calories: 0 };
-      S.acts       = d.activities || {};
+      S.acts       = d.activities || [];
+      S.goal       = d.goal     || 0;
+      S.bmr        = d.bmr      || {};
+      S.tdee       = d.tdee     || 0;
+      S.cal_target = d.cal_target || 0;
+      if (d.sheet_url) {
+        S.sheet_url = d.sheet_url;
+        const lnk = document.getElementById('sheet-link');
+        if (lnk) { lnk.href = d.sheet_url; lnk.style.display = 'inline'; }
+      }
       renderWeight(); renderFood(); renderActivities();
     })
     .withFailureHandler(err => toast('Load error: ' + err.message))
@@ -399,6 +538,7 @@ function changeLogDate() {
   const d = document.getElementById('log-date').value;
   if (!d) return;
   S.logDate = d;
+  updateDayDisplay(d);
   loadLogDate(d);
 }
 
@@ -415,7 +555,7 @@ function loadConfigData() {
 
 function loadHistory() {
   google.script.run
-    .withSuccessHandler(data => { S.histData = data; renderHistTab(S.histTab); })
+    .withSuccessHandler(data => { S.histData = data; S.goal = data.goal || S.goal; renderHistTab(S.histTab); })
     .withFailureHandler(e => toast('History error: ' + e.message))
     .getHistoryPage(90);
 }
@@ -431,7 +571,18 @@ function logWeight() {
   const v = parseFloat(document.getElementById('weight-input').value);
   if (!v || v < 50 || v > 500) { toast('Enter a valid weight (50–500 lbs)'); return; }
   google.script.run
-    .withSuccessHandler(d => { S.wt = d; renderWeight(); document.getElementById('weight-input').value = ''; toast('Weight logged ✓'); })
+    .withSuccessHandler(d => {
+      S.wt = d;
+      if (d.weight && S.bmr?.weight1 && S.bmr?.weight2 && S.bmr.weight1 !== S.bmr.weight2) {
+        const slope = (S.bmr.tdee2 - S.bmr.tdee1) / (S.bmr.weight2 - S.bmr.weight1);
+        S.tdee = Math.round(S.bmr.tdee1 + slope * (d.weight - S.bmr.weight1));
+        const deficit = Math.round((S.bmr.goalLbsWeek || 0) * 3500 / 7);
+        S.cal_target = S.tdee ? S.tdee - deficit : S.goal;
+      }
+      renderWeight(); renderCalTotals();
+      document.getElementById('weight-input').value = '';
+      toast('Weight logged ✓');
+    })
     .withFailureHandler(e => toast('Error: ' + e.message))
     .logWeight(v, S.logDate);
 }
@@ -439,8 +590,9 @@ function logWeight() {
 // ── Food ──────────────────────────────────────────────────────────────────────
 function renderFood() {
   const sel = document.getElementById('food-select'), prev = sel.value;
-  sel.innerHTML = S.foods.length
-    ? S.foods.map(f => `<option value="${f.name}" data-cal="${f.calories_per_serving}">${f.name} · ${f.serving_name} · ${f.calories_per_serving} cal</option>`).join('')
+  const sortedFoods = [...S.foods].sort((a, b) => a.name.localeCompare(b.name));
+  sel.innerHTML = sortedFoods.length
+    ? sortedFoods.map(f => `<option value="${f.name}" data-cal="${f.calories_per_serving}">${f.name} · ${f.serving_name} · ${f.calories_per_serving} cal</option>`).join('')
     : '<option value="">— add foods in Configure —</option>';
   if (prev) sel.value = prev;
   updateCalPreview();
@@ -455,63 +607,91 @@ function updateCalPreview() {
 }
 
 function computeActCal() {
-  return Math.round(S.activities.reduce((sum, a) => {
-    if (!a.calories) return sum;
-    const v = S.acts[a.name];
-    if (v === undefined || v === null || v === '') return sum;
-    if (a.type === 'checkbox') return sum + ((v == 1 || v === true || v === 'TRUE') ? a.calories : 0);
-    return sum + (parseFloat(v) || 0) * a.calories;
-  }, 0));
+  return Math.round((S.acts || []).reduce((sum, e) => sum + (parseFloat(e.calories_burned) || 0), 0));
 }
 
 function renderFoodEntries() {
   const f = S.food;
-  document.getElementById('food-entries').innerHTML = f.entries.map(e =>
-    `<li class="entry-item">
-      <div>
-        <div>${e.food_name}</div>
-        <div class="entry-sub">${e.num_servings} serving${e.num_servings !== 1 ? 's' : ''}</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <span class="cal-badge">${e.calories} cal</span>
-        <button class="small danger" onclick="deleteFoodEntry(${_attr(e.timestamp)})">✕</button>
-      </div>
-    </li>`
-  ).join('');
+  const MEALS = [
+    { key: 'breakfast', label: '🌅 Breakfast' },
+    { key: 'lunch',     label: '☀️ Lunch' },
+    { key: 'dinner',    label: '🌙 Dinner' },
+    { key: '',          label: 'Other' },
+  ];
+
+  let html = '';
+  let anyShown = false;
+  for (const meal of MEALS) {
+    const entries = f.entries.filter(e => (e.meal || '') === meal.key);
+    if (!entries.length) continue;
+    anyShown = true;
+    const subtotal = Math.round(entries.reduce((s, e) => s + (e.calories || 0), 0));
+    html += `<div class="meal-section-header">
+      <span>${meal.label}</span>
+      <span class="meal-subtotal">${subtotal} cal</span>
+    </div>`;
+    html += entries.map(e =>
+      `<li class="entry-item">
+        <div>
+          <div>${e.food_name}</div>
+          <div class="entry-sub">${e.num_servings} serving${e.num_servings !== 1 ? 's' : ''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="cal-badge">${e.calories} cal</span>
+          <button class="small danger" onclick="deleteFoodEntry(${_attr(e.timestamp)})">✕</button>
+        </div>
+      </li>`
+    ).join('');
+  }
+  if (!anyShown) html = '';
+  document.getElementById('food-entries').innerHTML = html;
   renderCalTotals();
 }
 
 function renderCalTotals() {
-  const f    = S.food;
-  const burn = computeActCal();
-  const tr   = document.getElementById('food-total-row');
-  const br   = document.getElementById('food-burn-row');
-  const nr   = document.getElementById('food-net-row');
+  const f      = S.food;
+  const burn   = computeActCal();
+  const tr     = document.getElementById('food-total-row');
+  const br     = document.getElementById('food-burn-row');
+  const nr     = document.getElementById('food-net-row');
+  const tgtr   = document.getElementById('food-target-row');
+  const card   = document.getElementById('cal-summary-card');
+  const target = S.cal_target || S.goal;
   if (f.entries.length) {
+    if (card) card.style.display = 'block';
     tr.style.display = 'flex';
+    br.style.display = 'flex';
+    nr.style.display = 'flex';
     document.getElementById('food-total-cal').textContent = f.total_calories + ' cal';
-    if (burn > 0) {
-      br.style.display = 'flex'; nr.style.display = 'flex';
-      document.getElementById('food-burn-cal').textContent = '−' + burn + ' cal';
-      document.getElementById('food-net-cal').textContent  = Math.max(0, f.total_calories - burn) + ' cal';
+    document.getElementById('food-burn-cal').textContent  = burn + ' cal';
+    const net   = f.total_calories - burn;
+    const netEl = document.getElementById('food-net-cal');
+    netEl.textContent      = net + ' cal';
+    netEl.style.background = (target > 0 ? net < target : net < 0) ? '#34c759' : '#ff3b30';
+    if (target > 0) {
+      tgtr.style.display = 'flex';
+      document.getElementById('food-target-cal').textContent = target + ' cal';
     } else {
-      br.style.display = 'none'; nr.style.display = 'none';
+      tgtr.style.display = 'none';
     }
   } else {
     tr.style.display = 'none'; br.style.display = 'none'; nr.style.display = 'none';
+    tgtr.style.display = 'none';
+    if (card) card.style.display = 'none';
   }
 }
 
-function logFood() {
+function logFood(meal) {
   const sel = document.getElementById('food-select');
   if (!sel.value) { toast('Select a food'); return; }
   const srv = parseFloat(document.getElementById('food-servings').value);
   if (!srv || srv <= 0) { toast('Enter servings'); return; }
   const cal = Math.round(parseFloat(sel.options[sel.selectedIndex].dataset.cal) * srv);
+  const mealLabel = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner' }[meal] || '';
   google.script.run
-    .withSuccessHandler(d => { S.food = d; renderFoodEntries(); document.getElementById('food-servings').value = '1'; updateCalPreview(); toast('Food logged ✓'); })
+    .withSuccessHandler(d => { S.food = d; renderFoodEntries(); document.getElementById('food-servings').value = '1'; updateCalPreview(); toast(mealLabel ? mealLabel + ' logged ✓' : 'Food logged ✓'); })
     .withFailureHandler(e => toast('Error: ' + e.message))
-    .logFood(sel.value, srv, cal, S.logDate);
+    .logFood(sel.value, srv, cal, S.logDate, meal);
 }
 
 function deleteFoodEntry(ts) {
@@ -523,39 +703,104 @@ function deleteFoodEntry(ts) {
 
 // ── Activities ────────────────────────────────────────────────────────────────
 function renderActivities() {
-  const el = document.getElementById('activities-list');
-  if (!S.activities.length) {
-    el.innerHTML = '<div class="empty">No activities configured yet.<br>Add some in ⚙️ Configure.</div>';
-    return;
-  }
-  el.innerHTML = S.activities.map(a => {
-    const val     = S.acts[a.name];
-    const calNote = a.calories ? `<span style="font-size:12px;color:#34c759;margin-left:4px;">${a.calories} cal</span>` : '';
-    const goalTxt = a.goal ? `goal: ${a.goal}${a.unit ? ' ' + a.unit : ''}` : '';
-    if (a.type === 'checkbox') {
-      const chk = (val === true || val === 'TRUE' || val == 1) ? 'checked' : '';
-      return `<div class="act-row">
-        <div><div class="act-name">${a.name}${calNote}</div>${goalTxt ? `<div class="act-goal">${goalTxt}</div>` : ''}</div>
-        <label class="toggle"><input type="checkbox" id="act-${CSS.escape(a.name)}" ${chk}><span class="toggle-slider"></span></label>
-      </div>`;
-    } else {
-      return `<div class="act-row">
-        <div><div class="act-name">${a.name}${a.unit ? ` <span style="font-size:13px;color:#6e6e73;">(${a.unit})</span>` : ''}${calNote}</div>${goalTxt ? `<div class="act-goal">${goalTxt}</div>` : ''}</div>
-        <div class="act-input-wrap"><input type="number" id="act-${CSS.escape(a.name)}" value="${val !== undefined ? val : ''}" placeholder="0" min="0"></div>
-      </div>`;
-    }
-  }).join('');
+  const sel = document.getElementById('act-select'), prev = sel.value;
+  const sortedActs = [...S.activities].sort((a, b) => a.name.localeCompare(b.name));
+  sel.innerHTML = sortedActs.length
+    ? sortedActs.map(a => `<option value="${a.name}">${a.name}${a.unit ? ' (' + a.unit + ')' : ''}${a.calories ? ' · ' + a.calories + ' cal/unit' : ''}</option>`).join('')
+    : '<option value="">— add activities in Configure —</option>';
+  if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+  updateActPreview();
+  renderActEntries();
 }
 
-function saveActivities() {
-  const entries = S.activities.map(a => {
-    const el = document.getElementById('act-' + CSS.escape(a.name));
-    return { name: a.name, value: a.type === 'checkbox' ? (el && el.checked ? 1 : 0) : (el ? parseFloat(el.value) || 0 : 0) };
-  });
+function updateActPreview() {
+  const sel  = document.getElementById('act-select');
+  const act  = S.activities.find(a => a.name === sel.value);
+  const wrap = document.getElementById('act-value-wrap');
+  if (!act) { wrap.innerHTML = ''; document.getElementById('act-cal-preview').textContent = '—'; return; }
+  if (act.type === 'checkbox') {
+    wrap.innerHTML = `<label style="display:flex;align-items:center;gap:8px;font-size:17px;cursor:pointer;padding-top:6px;"><input type="checkbox" id="act-value" onchange="updateActCalPreview()" style="width:22px;height:22px;"> Done</label>`;
+  } else {
+    wrap.innerHTML = `<label>${act.unit || 'Value'}</label><input type="number" id="act-value" placeholder="0" min="0" oninput="updateActCalPreview()" onkeydown="if(event.key==='Enter')logActivity()">`;
+  }
+  updateActCalPreview();
+}
+
+// Returns cal-per-unit (or cal-per-session for checkbox) adjusted for today's weight.
+function actCalPerUnit(act) {
+  const w = S.wt?.weight;
+  if (w && act.cal_weight1 && act.cal_weight2 && act.cal_weight1 !== act.cal_weight2) {
+    const slope = (act.cal_per_unit2 - act.cal_per_unit1) / (act.cal_weight2 - act.cal_weight1);
+    return Math.round((act.cal_per_unit1 + slope * (w - act.cal_weight1)) * 1000) / 1000;
+  }
+  return act.calories || 0;
+}
+
+function updateActCalPreview() {
+  const sel       = document.getElementById('act-select');
+  const act       = S.activities.find(a => a.name === sel.value);
+  const valEl     = document.getElementById('act-value');
+  const previewEl = document.getElementById('act-cal-preview');
+  if (!act) { previewEl.textContent = '—'; return; }
+  const cpr = actCalPerUnit(act);
+  if (!cpr) { previewEl.textContent = '—'; return; }
+  let cal = 0;
+  if (act.type === 'checkbox') { cal = valEl && valEl.checked ? Math.round(cpr) : 0; }
+  else { cal = Math.round((parseFloat(valEl?.value) || 0) * cpr); }
+  previewEl.textContent = cal || '—';
+}
+
+function renderActEntries() {
+  document.getElementById('act-entries').innerHTML = (S.acts || []).map(e => {
+    const cfg = S.activities.find(a => a.name === e.activity_name);
+    const valDisplay = cfg?.type === 'checkbox' ? 'Done' : `${e.value}${cfg?.unit ? ' ' + cfg.unit : ''}`;
+    return `<li class="entry-item">
+      <div>
+        <div>${e.activity_name}</div>
+        <div class="entry-sub">${valDisplay}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        ${e.calories_burned ? `<span class="cal-badge" style="background:#34c759;">${e.calories_burned} cal</span>` : ''}
+        <button class="small danger" onclick="deleteActivityEntry(${_attr(e.timestamp)})">✕</button>
+      </div>
+    </li>`;
+  }).join('');
+  renderCalTotals();
+}
+
+function logActivity() {
+  const sel = document.getElementById('act-select');
+  const act = S.activities.find(a => a.name === sel.value);
+  if (!act) { toast('Select an activity'); return; }
+  const valEl = document.getElementById('act-value');
+  const cpr   = actCalPerUnit(act);
+  let value, cal;
+  if (act.type === 'checkbox') {
+    value = valEl && valEl.checked ? 1 : 0;
+    cal   = value ? Math.round(cpr) : 0;
+  } else {
+    value = parseFloat(valEl?.value) || 0;
+    if (!value) { toast('Enter a value'); return; }
+    cal = Math.round(value * cpr);
+  }
   google.script.run
-    .withSuccessHandler(d => { S.acts = d; renderActivities(); renderCalTotals(); toast('Saved ✓'); })
+    .withSuccessHandler(d => {
+      S.acts = d;
+      renderActEntries();
+      const ve = document.getElementById('act-value');
+      if (ve) { ve.type === 'checkbox' ? (ve.checked = false) : (ve.value = ''); }
+      updateActCalPreview();
+      toast('Activity logged ✓');
+    })
     .withFailureHandler(e => toast('Error: ' + e.message))
-    .logActivities(entries, S.logDate);
+    .logActivity(act.name, value, cal, S.logDate);
+}
+
+function deleteActivityEntry(ts) {
+  google.script.run
+    .withSuccessHandler(d => { S.acts = d; renderActEntries(); toast('Removed'); })
+    .withFailureHandler(e => toast('Error: ' + e.message))
+    .deleteActivityEntry(ts, S.logDate);
 }
 
 // ── History ───────────────────────────────────────────────────────────────────
@@ -621,35 +866,33 @@ function renderHistCalories() {
 
 function drawCalSvg() {
   if (!S.histData) return '<div class="empty">Loading…</div>';
-  const foodData = S.histData.food            || {};
-  const actData  = S.histData.activities      || {};
-  const actsConf = S.histData.activities_config || [];
+  const foodData = S.histData.food       || {};
+  const actData  = S.histData.activities || {};
+  // Prefer BMR-computed target at today's weight; fall back to manual goal
+  const goal     = S.cal_target || S.histData.goal || S.goal || 0;
 
   const days = [];
   for (let i = 6; i >= 0; i--) {
     const d = new Date(TODAY + 'T12:00:00');
     d.setDate(d.getDate() - i);
-    const ds   = d.toISOString().slice(0, 10);
-    const food = (foodData[ds] || {}).total_calories || 0;
-    const aLog = actData[ds] || {};
-    let burn = 0;
-    actsConf.forEach(a => {
-      if (!a.calories) return;
-      const v = aLog[a.name];
-      if (v === undefined || v === null || v === '') return;
-      if (a.type === 'checkbox') burn += (v == 1 || v === true || v === 'TRUE') ? a.calories : 0;
-      else burn += (parseFloat(v) || 0) * a.calories;
-    });
-    days.push({ date: ds, food, burn: Math.round(burn), net: Math.max(0, food - Math.round(burn)) });
+    const ds         = d.toISOString().slice(0, 10);
+    const food       = (foodData[ds] || {}).total_calories || 0;
+    const actEntries = actData[ds] || [];
+    const burn       = Math.round(actEntries.reduce((s, e) => s + (parseFloat(e.calories_burned) || 0), 0));
+    days.push({ date: ds, food, burn, net: Math.max(food - burn, 0) });
   }
 
   if (days.every(d => d.food === 0)) return '<div class="empty">No calorie data for the last 7 days.</div>';
 
   const W = 440, H = 180, ML = 40, MR = 10, MT = 22, MB = 28;
   const PW = W - ML - MR, PH = H - MT - MB;
-  const maxCal = Math.max(...days.map(d => d.food), 500);
-  const barW   = (PW / 7) * 0.6;
-  const barGap = PW / 7;
+  const maxCal = Math.max(...days.map(d => d.food), goal || 0, 500);
+  const slotW   = PW / 7;
+  // Within each slot: dayPad | foodW | intraGap | netW | (right gap = inter-day space)
+  const dayPad   = slotW * 0.10;
+  const foodW    = slotW * 0.26;
+  const intraGap = slotW * 0.05;
+  const netW     = slotW * 0.36;
 
   let yLines = '';
   for (let i = 0; i <= 3; i++) {
@@ -660,22 +903,47 @@ function drawCalSvg() {
   }
 
   let bars = '';
+
+  // Goal line
+  if (goal > 0) {
+    const goalY = MT + PH - (goal / maxCal) * PH;
+    bars += `<line x1="${ML}" y1="${goalY.toFixed(1)}" x2="${W - MR}" y2="${goalY.toFixed(1)}" stroke="#ff3b30" stroke-width="1.5" stroke-dasharray="5,3"/>`;
+    bars += `<text x="${W - MR - 2}" y="${(goalY - 3).toFixed(1)}" text-anchor="end" font-size="9" fill="#ff3b30">goal</text>`;
+  }
+
   days.forEach((d, i) => {
-    const bx  = ML + i * barGap + barGap * 0.2;
+    const lx = ML + i * slotW + dayPad;                  // food bar x
+    const rx = lx + foodW + intraGap;                    // net bar x
+    const cx = ML + i * slotW + dayPad + (foodW + intraGap + netW) / 2;  // group center
+
+    // Left bar: food (orange, narrower)
     if (d.food > 0) {
-      const bh   = (d.food / maxCal) * PH;
-      const by   = MT + PH - bh;
-      bars += `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${barW.toFixed(1)}" height="${bh.toFixed(1)}" fill="#007aff" rx="3"/>`;
-      if (d.burn > 0) {
-        const burnH = Math.min((d.burn / maxCal) * PH, bh);
-        bars += `<rect x="${bx.toFixed(1)}" y="${(MT + PH - burnH).toFixed(1)}" width="${barW.toFixed(1)}" height="${burnH.toFixed(1)}" fill="#34c759" rx="3"/>`;
-      }
-      const label = d.burn > 0 ? d.net : d.food;
-      const lCol  = d.burn > 0 ? '#34c759' : '#007aff';
-      bars += `<text x="${(bx + barW / 2).toFixed(1)}" y="${(by - 4).toFixed(1)}" text-anchor="middle" font-size="10" fill="${lCol}" font-weight="600">${label}</text>`;
+      const fh = (d.food / maxCal) * PH;
+      bars += `<rect x="${lx.toFixed(1)}" y="${(MT + PH - fh).toFixed(1)}" width="${foodW.toFixed(1)}" height="${fh.toFixed(1)}" fill="#ff9500" rx="3"/>`;
     }
+
+    // Right bar: net — green up to goal, red above (wider)
+    if (d.net > 0) {
+      const nh = (d.net / maxCal) * PH;
+      const ny = MT + PH - nh;
+      if (goal > 0 && d.net > goal) {
+        const goalH = (goal / maxCal) * PH;
+        const overH = nh - goalH;
+        bars += `<rect x="${rx.toFixed(1)}" y="${(MT + PH - goalH).toFixed(1)}" width="${netW.toFixed(1)}" height="${goalH.toFixed(1)}" fill="#34c759" rx="3"/>`;
+        bars += `<rect x="${rx.toFixed(1)}" y="${ny.toFixed(1)}" width="${netW.toFixed(1)}" height="${overH.toFixed(1)}" fill="#ff3b30" rx="2"/>`;
+      } else {
+        const col = goal > 0 ? '#34c759' : '#007aff';
+        bars += `<rect x="${rx.toFixed(1)}" y="${ny.toFixed(1)}" width="${netW.toFixed(1)}" height="${nh.toFixed(1)}" fill="${col}" rx="3"/>`;
+      }
+
+      // Net label above right bar
+      const lCol = (goal > 0 ? d.net < goal : true) ? '#34c759' : '#ff3b30';
+      bars += `<text x="${(rx + netW / 2).toFixed(1)}" y="${(ny - 3).toFixed(1)}" text-anchor="middle" font-size="10" fill="${lCol}" font-weight="600">${d.net}</text>`;
+    }
+
+    // Day label centered under the bar group
     const dow = ['Su','Mo','Tu','We','Th','Fr','Sa'][new Date(d.date + 'T12:00:00').getDay()];
-    bars += `<text x="${(bx + barW / 2).toFixed(1)}" y="${H - 4}" text-anchor="middle" font-size="11" fill="#8e8e93">${dow}</text>`;
+    bars += `<text x="${cx.toFixed(1)}" y="${H - 4}" text-anchor="middle" font-size="11" fill="#8e8e93">${dow}</text>`;
   });
 
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;">${yLines}${bars}</svg>`;
@@ -696,45 +964,126 @@ function renderHistActivities() {
     dates.push(d.toISOString().slice(0, 10));
   }
 
-  const activeDates = dates.filter(d => actData[d] && Object.keys(actData[d]).length);
+  const activeDates = dates.filter(d => actData[d] && actData[d].length);
   if (!activeDates.length) {
     document.getElementById('hist-acts-content').innerHTML = '<div class="card"><div class="empty">No activity data for the last 14 days.</div></div>';
     return;
   }
 
   document.getElementById('hist-acts-content').innerHTML = activeDates.slice().reverse().map(d => {
-    const log  = actData[d] || {};
-    const rows = actsConf.map(a => {
-      const v = log[a.name];
-      if (v === undefined) return '';
-      let disp;
-      if (a.type === 'checkbox') {
-        disp = (v == 1 || v === true || v === 'TRUE')
-          ? '<span style="color:#34c759;font-weight:700;">✓</span>'
-          : '<span style="color:#c7c7cc;">—</span>';
-      } else {
-        disp = (v !== '' && v !== null) ? `<strong>${v}${a.unit ? ' ' + a.unit : ''}</strong>` : '<span style="color:#c7c7cc;">—</span>';
-      }
+    const entries   = actData[d] || [];
+    const totalBurn = Math.round(entries.reduce((s, e) => s + (parseFloat(e.calories_burned) || 0), 0));
+    const rows = entries.map(e => {
+      const cfg        = actsConf.find(a => a.name === e.activity_name);
+      const valDisplay = cfg?.type === 'checkbox' ? '✓ Done' : `${e.value}${cfg?.unit ? ' ' + cfg.unit : ''}`;
       return `<div class="act-row" style="padding:8px 0;">
-        <span class="act-name" style="font-size:15px;">${a.name}</span>
-        <span>${disp}</span>
+        <span class="act-name" style="font-size:15px;">${e.activity_name}</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:14px;color:#1c1c1e;">${valDisplay}</span>
+          ${e.calories_burned ? `<span class="cal-badge" style="background:#34c759;font-size:12px;">${e.calories_burned} cal</span>` : ''}
+        </div>
       </div>`;
-    }).filter(Boolean).join('');
+    }).join('');
     return `<div class="card" style="margin-bottom:10px;">
-      <div style="font-size:13px;font-weight:600;color:#6e6e73;margin-bottom:8px;">${d}</div>
-      ${rows || '<div class="empty" style="padding:4px 0;">No entries</div>'}
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="font-size:13px;font-weight:600;color:#6e6e73;">${d}</div>
+        ${totalBurn ? `<span class="cal-badge" style="background:#34c759;">${totalBurn} cal burned</span>` : ''}
+      </div>
+      ${rows}
     </div>`;
   }).join('');
 }
 
 // ── Configure ─────────────────────────────────────────────────────────────────
-function renderConfig() { renderFoodsConfig(); renderActsConfig(); }
+function renderConfig() {
+  const el = document.getElementById('cal-goal-input');
+  if (el && S.goal) el.value = S.goal;
+  const b = S.bmr || {};
+  if (b.weight1) document.getElementById('bmr-w1').value = b.weight1;
+  if (b.tdee1)   document.getElementById('bmr-t1').value = b.tdee1;
+  if (b.weight2) document.getElementById('bmr-w2').value = b.weight2;
+  if (b.tdee2)   document.getElementById('bmr-t2').value = b.tdee2;
+  if (b.baseSteps)   document.getElementById('bmr-steps').value = b.baseSteps;
+  if (b.goalLbsWeek) document.getElementById('bmr-goal').value  = b.goalLbsWeek;
+  updateBMRPreview();
+  renderFoodsConfig();
+  renderActsConfig();
+}
+
+function updateBMRPreview() {
+  const w1  = parseFloat(document.getElementById('bmr-w1')?.value)    || 0;
+  const t1  = parseFloat(document.getElementById('bmr-t1')?.value)    || 0;
+  const w2  = parseFloat(document.getElementById('bmr-w2')?.value)    || 0;
+  const t2  = parseFloat(document.getElementById('bmr-t2')?.value)    || 0;
+  const stp = parseInt(document.getElementById('bmr-steps')?.value)   || 0;
+  const glb = parseFloat(document.getElementById('bmr-goal')?.value)  || 0;
+  const box = document.getElementById('bmr-preview');
+  if (!box) return;
+  if (!w1 || !t1 || !w2 || !t2 || w1 === w2) { box.style.display = 'none'; return; }
+  const slope   = (t2 - t1) / (w2 - w1);
+  const deficit = Math.round(glb * 3500 / 7);
+  let html = '';
+  html += `<b>Model:</b> ${slope > 0 ? '+' : ''}${Math.round(slope)} cal/lb<br>`;
+  if (stp) html += `<b>Baseline steps:</b> ${stp.toLocaleString()} steps/day assumed in TDEE<br>`;
+  if (glb) html += `<b>Deficit:</b> ${deficit} cal/day (${glb} lbs/week × 3,500 ÷ 7)<br>`;
+  const curWt = S.wt?.weight;
+  if (curWt) {
+    const tdee   = Math.round(t1 + slope * (curWt - w1));
+    const target = tdee - deficit;
+    html += `<br><b>At today's weight (${curWt} lbs):</b><br>`;
+    html += `&nbsp;&nbsp;TDEE: ${tdee.toLocaleString()} cal/day<br>`;
+    if (glb) html += `&nbsp;&nbsp;Target: ${target.toLocaleString()} cal/day`;
+  } else {
+    const tdee1t = Math.round(t1 + slope * (w1 - w1));
+    const tdee2t = Math.round(t1 + slope * (w2 - w1));
+    html += `<br><b>At ${w1} lbs:</b> TDEE ${tdee1t.toLocaleString()} → target ${(tdee1t - deficit).toLocaleString()} cal/day<br>`;
+    html += `<b>At ${w2} lbs:</b> TDEE ${tdee2t.toLocaleString()} → target ${(tdee2t - deficit).toLocaleString()} cal/day`;
+  }
+  box.innerHTML = html;
+  box.style.display = 'block';
+}
+
+function saveBMRSettings() {
+  const data = {
+    weight1:     parseFloat(document.getElementById('bmr-w1').value)    || 0,
+    tdee1:       parseFloat(document.getElementById('bmr-t1').value)    || 0,
+    weight2:     parseFloat(document.getElementById('bmr-w2').value)    || 0,
+    tdee2:       parseFloat(document.getElementById('bmr-t2').value)    || 0,
+    baseSteps:   parseInt(document.getElementById('bmr-steps').value)   || 0,
+    goalLbsWeek: parseFloat(document.getElementById('bmr-goal').value)  || 0
+  };
+  if (!data.weight1 || !data.tdee1 || !data.weight2 || !data.tdee2) {
+    toast('Enter both calibration points'); return;
+  }
+  if (data.weight1 === data.weight2) { toast('Weights must differ'); return; }
+  google.script.run
+    .withSuccessHandler(b => {
+      S.bmr = b;
+      const slope   = (b.tdee2 - b.tdee1) / (b.weight2 - b.weight1);
+      const deficit = Math.round((b.goalLbsWeek || 0) * 3500 / 7);
+      if (S.wt?.weight) {
+        S.tdee       = Math.round(b.tdee1 + slope * (S.wt.weight - b.weight1));
+        S.cal_target = S.tdee - deficit;
+      }
+      toast('Saved ✓'); renderCalTotals();
+    })
+    .withFailureHandler(e => toast('Error: ' + e.message))
+    .setBMRSettings(data);
+}
+
+function saveGoal() {
+  const v = parseInt(document.getElementById('cal-goal-input').value) || 0;
+  google.script.run
+    .withSuccessHandler(g => { S.goal = g; toast('Goal saved ✓'); renderCalTotals(); })
+    .withFailureHandler(e => toast('Error: ' + e.message))
+    .setGoal(v);
+}
 
 let editingFood = null;
 
 function renderFoodsConfig() {
   const q     = (document.getElementById('food-filter')?.value || '').toLowerCase().trim();
-  const foods = q ? S.foods.filter(f => f.name.toLowerCase().includes(q)) : S.foods;
+  const foods = [...S.foods].sort((a, b) => a.name.localeCompare(b.name)).filter(f => !q || f.name.toLowerCase().includes(q));
   document.getElementById('foods-config-list').innerHTML = foods.length
     ? foods.map(f => {
         if (editingFood === f.name) {
@@ -779,16 +1128,20 @@ function saveFoodEdit(originalName) {
 
 function renderActsConfig() {
   const q    = (document.getElementById('act-filter')?.value || '').toLowerCase().trim();
-  const acts = q ? S.activities.filter(a => a.name.toLowerCase().includes(q)) : S.activities;
+  const acts = [...S.activities].sort((a, b) => a.name.localeCompare(b.name)).filter(a => !q || a.name.toLowerCase().includes(q));
   document.getElementById('acts-config-list').innerHTML = acts.length
-    ? acts.map(a =>
-        `<div class="cfg-row">
+    ? acts.map(a => {
+        const isWtDep = a.cal_weight1 && a.cal_weight2 && a.cal_weight1 !== a.cal_weight2;
+        const calDisplay = isWtDep
+          ? `${a.cal_per_unit1}–${a.cal_per_unit2}c/${a.unit || 'unit'} ⚖️`
+          : (a.calories ? a.calories + 'c' : '—');
+        return `<div class="cfg-row">
           <div class="cfg-name">${a.name}</div>
-          <div class="cfg-meta">${a.type}${a.unit ? ' · ' + a.unit : ''}${a.goal ? ' · ' + a.goal : ''}</div>
-          <div class="cfg-cal">${a.calories ? a.calories + 'c' : '—'}</div>
+          <div class="cfg-meta">${a.type}${a.unit ? ' · ' + a.unit : ''}${a.goal ? ' · goal ' + a.goal : ''}</div>
+          <div class="cfg-cal" style="font-size:12px;">${calDisplay}</div>
           <button class="small danger" onclick="deleteActivity(${_attr(a.name)})">✕</button>
-        </div>`
-      ).join('')
+        </div>`;
+      }).join('')
     : q ? '<div class="empty">No matching activities.</div>' : '<div class="empty">No activities yet.</div>';
 }
 
@@ -817,22 +1170,53 @@ function deleteFood(name) {
     .deleteFood(name);
 }
 
+function toggleActCalForm() {
+  const type      = document.getElementById('new-act-type')?.value;
+  const wtdepWrap = document.getElementById('new-act-wtdep-wrap');
+  const fixedDiv  = document.getElementById('new-act-cal-fixed');
+  const wtdepDiv  = document.getElementById('new-act-cal-wtdep');
+  const wtdepChk  = document.getElementById('new-act-wtdep');
+  if (!wtdepWrap) return;
+  const isNumber  = type === 'number';
+  const isWtDep   = isNumber && wtdepChk.checked;
+  wtdepWrap.style.display  = isNumber ? 'block' : 'none';
+  fixedDiv.style.display   = isWtDep  ? 'none'  : 'block';
+  wtdepDiv.style.display   = isWtDep  ? 'block' : 'none';
+}
+
 function addActivity() {
-  const name = document.getElementById('new-act-name').value.trim();
-  const type = document.getElementById('new-act-type').value;
-  const unit = document.getElementById('new-act-unit').value.trim();
-  const goal = document.getElementById('new-act-goal').value.trim();
-  const cal  = parseFloat(document.getElementById('new-act-calories').value) || 0;
+  const name    = document.getElementById('new-act-name').value.trim();
+  const type    = document.getElementById('new-act-type').value;
+  const unit    = document.getElementById('new-act-unit').value.trim();
+  const goal    = document.getElementById('new-act-goal').value.trim();
+  const isWtDep = type === 'number' && document.getElementById('new-act-wtdep').checked;
   if (!name) { toast('Name required'); return; }
+  let cal = 0, cw1 = 0, cpu1 = 0, cw2 = 0, cpu2 = 0;
+  if (isWtDep) {
+    cw1  = parseFloat(document.getElementById('new-act-cw1').value)  || 0;
+    cpu1 = parseFloat(document.getElementById('new-act-cpu1').value) || 0;
+    cw2  = parseFloat(document.getElementById('new-act-cw2').value)  || 0;
+    cpu2 = parseFloat(document.getElementById('new-act-cpu2').value) || 0;
+    if (!cw1 || !cpu1 || !cw2 || !cpu2) { toast('Enter both calibration points'); return; }
+    if (cw1 === cw2) { toast('Weights must differ'); return; }
+  } else {
+    cal = parseFloat(document.getElementById('new-act-calories').value) || 0;
+  }
   google.script.run
     .withSuccessHandler(acts => {
       S.activities = acts; renderActsConfig(); renderActivities();
-      ['new-act-name','new-act-unit','new-act-goal','new-act-calories'].forEach(id => document.getElementById(id).value = '');
+      ['new-act-name','new-act-unit','new-act-goal','new-act-calories',
+       'new-act-cw1','new-act-cpu1','new-act-cw2','new-act-cpu2']
+        .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
       document.getElementById('new-act-type').value = 'checkbox';
+      document.getElementById('new-act-wtdep').checked = false;
+      toggleActCalForm();
       toast('Activity added ✓');
     })
     .withFailureHandler(e => toast('Error: ' + e.message))
-    .saveActivity({ name, type, unit, goal, calories: cal });
+    .saveActivity({ name, type, unit, goal, calories: cal,
+                    cal_weight1: cw1, cal_per_unit1: cpu1,
+                    cal_weight2: cw2, cal_per_unit2: cpu2 });
 }
 
 function deleteActivity(name) {

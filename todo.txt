@@ -5,13 +5,20 @@ Add items below. When ready to implement, point Claude to this file.
 
 PENDING
 -------
-On log page, the weight is implemented well. It is a single vbalue and appears when a date is switched.
-
-Food and activity log look reasonable, but teh subtraction is not working well when the value
- is negativbe. 
-
-Addituonally, the activity is being handled like the weight - a single thing that happnes on a day. 
-However, I want activities treated like foor 
+(none)
 
 COMPLETED
 ---------
+- Weight: single value per day, overwrites on re-entry; shows when date is switched ✅
+- Calorie subtraction: always shows Activity burn and Net in summary, even when burn is zero ✅
+- Activities: multiple per day (like food), each logged separately and summed ✅
+- Activities history: multiple entries per day, same as food ✅
+- Meal categorization: Breakfast / Lunch / Dinner buttons; entries grouped by meal with subtotals ✅
+- Weight-dependent activity calories: two-point calibration (steps/walking scales with body weight) ✅
+- BMR-based calorie target: two weight/TDEE reference points, linear model, lbs/week goal → daily target ✅
+- Configure tab split into 3 sub-tabs: Foods / Activities / Weight ✅
+- Eastern Time date fix: TODAY uses America/New_York timezone ✅
+- Day of week shown above date picker in log ✅
+- Link to source Google Sheet in app header ✅
+- Calorie history chart: dual bars per day (orange food, green/red net), inter-day spacing, computed goal line ✅
+- Meal section dividers: slightly grey for visibility ✅
