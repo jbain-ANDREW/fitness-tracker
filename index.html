@@ -179,6 +179,7 @@
              onkeydown="if(event.key==='Enter')logWeight()">
       <button class="small blue" onclick="logWeight()" style="padding:10px 18px;font-size:16px;">Log</button>
     </div>
+    <button class="small grey" onclick="copyYesterdayWeight()" style="width:100%;margin-top:8px;">No scale today — use yesterday's weight</button>
   </div>
 
   <!-- Calorie summary -->
@@ -567,24 +568,50 @@ function renderWeight() {
   document.getElementById('weight-label').textContent   = w ? 'logged' : 'not logged';
 }
 
+function applyWeightResult(d) {
+  S.wt = d;
+  if (d.weight && S.bmr?.weight1 && S.bmr?.weight2 && S.bmr.weight1 !== S.bmr.weight2) {
+    const slope = (S.bmr.tdee2 - S.bmr.tdee1) / (S.bmr.weight2 - S.bmr.weight1);
+    S.tdee = Math.round(S.bmr.tdee1 + slope * (d.weight - S.bmr.weight1));
+    const deficit = Math.round((S.bmr.goalLbsWeek || 0) * 3500 / 7);
+    S.cal_target = S.tdee ? S.tdee - deficit : S.goal;
+  }
+  renderWeight(); renderCalTotals();
+}
+
 function logWeight() {
   const v = parseFloat(document.getElementById('weight-input').value);
   if (!v || v < 50 || v > 500) { toast('Enter a valid weight (50–500 lbs)'); return; }
   google.script.run
     .withSuccessHandler(d => {
-      S.wt = d;
-      if (d.weight && S.bmr?.weight1 && S.bmr?.weight2 && S.bmr.weight1 !== S.bmr.weight2) {
-        const slope = (S.bmr.tdee2 - S.bmr.tdee1) / (S.bmr.weight2 - S.bmr.weight1);
-        S.tdee = Math.round(S.bmr.tdee1 + slope * (d.weight - S.bmr.weight1));
-        const deficit = Math.round((S.bmr.goalLbsWeek || 0) * 3500 / 7);
-        S.cal_target = S.tdee ? S.tdee - deficit : S.goal;
-      }
-      renderWeight(); renderCalTotals();
+      applyWeightResult(d);
       document.getElementById('weight-input').value = '';
       toast('Weight logged ✓');
     })
     .withFailureHandler(e => toast('Error: ' + e.message))
     .logWeight(v, S.logDate);
+}
+
+// No scale handy: carry yesterday's logged weight forward to the
+// currently selected log date (works for backfilling a past date too,
+// not just literal "today").
+function copyYesterdayWeight() {
+  const d = new Date(S.logDate + 'T12:00:00');
+  d.setDate(d.getDate() - 1);
+  const prevDate = d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  google.script.run
+    .withSuccessHandler(prev => {
+      if (!prev || !prev.weight) { toast('No weight logged for ' + prevDate); return; }
+      google.script.run
+        .withSuccessHandler(d2 => {
+          applyWeightResult(d2);
+          toast('Copied ' + prev.weight + ' lbs from yesterday ✓');
+        })
+        .withFailureHandler(e => toast('Error: ' + e.message))
+        .logWeight(prev.weight, S.logDate);
+    })
+    .withFailureHandler(e => toast('Error: ' + e.message))
+    .getDateWeight(prevDate);
 }
 
 // ── Food ──────────────────────────────────────────────────────────────────────
