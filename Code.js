@@ -391,6 +391,20 @@ function auditAndFixSheets() {
       log.push(name + ': headers OK.');
     } else {
       log.push(name + ': MISMATCH -- expected [' + exp.join(', ') + '], found [' + actual.join(', ') + ']. Not auto-fixed -- review before correcting.');
+      // Header text alone doesn't prove the data is misaligned -- this code
+      // reads/writes by fixed column index, never by header name. Pull a
+      // couple of real data rows so header-vs-data alignment can actually
+      // be checked, instead of inferring it from the header row alone.
+      const lastRow = sh.getLastRow();
+      if (lastRow > 1) {
+        const sampleCount = Math.min(2, lastRow - 1);
+        const sample = sh.getRange(2, 1, sampleCount, width).getValues();
+        sample.forEach(function (row, idx) {
+          log.push('  row ' + (idx + 2) + ': [' + row.join(', ') + ']');
+        });
+      } else {
+        log.push('  (no data rows yet)');
+      }
     }
   });
 
