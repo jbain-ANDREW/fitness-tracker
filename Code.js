@@ -359,12 +359,60 @@ function auditAndFixSheets() {
   //    canonical schema. Only auto-writes headers when the row is fully blank
   //    (no data to misalign); any other mismatch is reported, not auto-fixed,
   //    since silently relabeling could mask a real column-order problem.
+  //
+  //    Header text alone doesn't prove the data is right (or wrong) -- this
+  //    code reads/writes by fixed column index, never by header name. So
+  //    every sheet (matched or mismatched) also gets: a couple of sample
+  //    data rows, and a scan of EVERY row at the code's actual column
+  //    positions for the type of value the code expects there (date/number/
+  //    required text). That's what catches "headers look fine but the data
+  //    underneath is garbage" -- header status and data quality are checked
+  //    independently, not inferred from each other.
   const expected = {};
   expected[WEIGHT_SHEET]   = ['date', 'weight_lbs'];
   expected[FOODS_SHEET]    = ['name', 'serving_name', 'serving_size', 'calories_per_serving'];
   expected[FOOD_LOG_SHEET] = ['timestamp', 'date', 'food_name', 'num_servings', 'calories_total', 'meal'];
   expected[ACT_SHEET]      = ['name', 'type', 'unit', 'goal', 'calories', 'cal_weight1', 'cal_per_unit1', 'cal_weight2', 'cal_per_unit2'];
   expected[ACT_LOG_SHEET]  = ['timestamp', 'date', 'activity_name', 'value', 'calories_burned'];
+
+  // Type of value the code actually expects at each position, in the same
+  // order as `expected` above -- this is what app correctness depends on,
+  // independent of whatever the header row says.
+  const colTypes = {};
+  colTypes[WEIGHT_SHEET]   = ['date', 'number'];
+  colTypes[FOODS_SHEET]    = ['text_required', 'text', 'text', 'number'];
+  colTypes[FOOD_LOG_SHEET] = ['datetime', 'date', 'text_required', 'number', 'number', 'text'];
+  colTypes[ACT_SHEET]      = ['text_required', 'text', 'text', 'text', 'number', 'number', 'number', 'number', 'number'];
+  colTypes[ACT_LOG_SHEET]  = ['datetime', 'date', 'text_required', 'any', 'number'];
+
+  function isOk(val, type) {
+    if (type === 'any') return true;
+    if (type === 'date' || type === 'datetime') {
+      return (val instanceof Date) || (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}/.test(val));
+    }
+    if (type === 'number') return val !== '' && val != null && !isNaN(parseFloat(val));
+    if (type === 'text_required') return val !== '' && val != null;
+    return true; // plain 'text' -- blank is allowed (e.g. optional notes/meal)
+  }
+
+  function scanDataQuality(sh, types, headers) {
+    const lastRow = sh.getLastRow();
+    if (lastRow < 2) return ['  (no data rows to check)'];
+    const data   = sh.getRange(2, 1, lastRow - 1, types.length).getValues();
+    const issues = [];
+    types.forEach(function (type, colIdx) {
+      const badRows = [];
+      data.forEach(function (row, rowIdx) {
+        if (!isOk(row[colIdx], type)) badRows.push(rowIdx + 2);
+      });
+      if (badRows.length) {
+        issues.push('  column "' + headers[colIdx] + '" (expects ' + type + '): ' +
+          badRows.length + ' bad value(s) -- row(s) ' + badRows.slice(0, 5).join(', ') +
+          (badRows.length > 5 ? ', ...' : ''));
+      }
+    });
+    return issues.length ? issues : ['  data quality OK (' + (lastRow - 1) + ' row(s) checked)'];
+  }
 
   Object.keys(expected).forEach(function (name) {
     const sh = ss.getSheetByName(name);
@@ -391,21 +439,22 @@ function auditAndFixSheets() {
       log.push(name + ': headers OK.');
     } else {
       log.push(name + ': MISMATCH -- expected [' + exp.join(', ') + '], found [' + actual.join(', ') + ']. Not auto-fixed -- review before correcting.');
-      // Header text alone doesn't prove the data is misaligned -- this code
-      // reads/writes by fixed column index, never by header name. Pull a
-      // couple of real data rows so header-vs-data alignment can actually
-      // be checked, instead of inferring it from the header row alone.
-      const lastRow = sh.getLastRow();
-      if (lastRow > 1) {
-        const sampleCount = Math.min(2, lastRow - 1);
-        const sample = sh.getRange(2, 1, sampleCount, width).getValues();
-        sample.forEach(function (row, idx) {
-          log.push('  row ' + (idx + 2) + ': [' + row.join(', ') + ']');
-        });
-      } else {
-        log.push('  (no data rows yet)');
-      }
     }
+
+    // Sample rows -- always, regardless of header match status.
+    const lastRow = sh.getLastRow();
+    if (lastRow > 1) {
+      const sampleCount = Math.min(2, lastRow - 1);
+      sh.getRange(2, 1, sampleCount, width).getValues().forEach(function (row, idx) {
+        log.push('  sample row ' + (idx + 2) + ': [' + row.join(', ') + ']');
+      });
+    } else {
+      log.push('  (no data rows yet)');
+    }
+
+    // Data-quality scan at the code's actual column positions -- independent
+    // of header match status, so good headers with bad data get caught too.
+    scanDataQuality(sh, colTypes[name], exp).forEach(function (line) { log.push(line); });
   });
 
   // 3. Show day-of-week alongside date for food and exercise logging, so
