@@ -448,7 +448,7 @@ function auditAndFixSheets() {
   // found in Activities and ActivityLog. Runs over the FULL actual width
   // of the sheet (not just the expected column count), so it also catches
   // shifts into columns the schema doesn't even know about.
-  function scanHeaderDataAlignment(sh, expLabels) {
+  function scanHeaderDataAlignment(sh, expLabels, expTypes) {
     const lastRow = sh.getLastRow();
     const lastCol = sh.getLastColumn();
     if (lastCol === 0) return ['  (no columns)'];
@@ -456,16 +456,22 @@ function auditAndFixSheets() {
     const dataRows  = lastRow > 1 ? sh.getRange(2, 1, lastRow - 1, lastCol).getValues() : [];
     const total = dataRows.length;
     const lines = [];
+    const optionalTypes = ['text', 'number_optional', 'any'];
     for (let col = 0; col < lastCol; col++) {
       const header = String(headerRow[col] || '').trim();
       const filled = dataRows.filter(function (row) { return row[col] !== '' && row[col] != null; }).length;
       const pct = total ? Math.round((filled / total) * 100) : 0;
       const expectedHere = col < expLabels.length ? expLabels[col] : '(none expected -- beyond schema)';
+      // A field marked optional (text/number_optional/any) being unfilled is
+      // expected, not a shift signal -- e.g. Foods' serving_note is a real,
+      // correctly-positioned column nobody has used yet. Only flag "never
+      // filled" for fields the code treats as required.
+      const isOptional = col < expTypes.length && optionalTypes.indexOf(expTypes[col]) !== -1;
       let flag = '';
       if (!header && filled > 0) {
         flag = '  <<== BLANK HEADER BUT HAS DATA in ' + filled + ' row(s) -- likely a missing/shifted label, INVESTIGATE';
-      } else if (header && total > 0 && filled === 0 && col < expLabels.length) {
-        flag = '  <<== HEADER PRESENT BUT NEVER FILLED -- likely this label\'s real data moved to a different column, INVESTIGATE';
+      } else if (header && total > 0 && filled === 0 && col < expLabels.length && !isOptional) {
+        flag = '  <<== HEADER PRESENT BUT NEVER FILLED (required field) -- likely this label\'s real data moved to a different column, INVESTIGATE';
       }
       lines.push('  col ' + (col + 1) + ': header="' + header + '" | expected="' + expectedHere +
         '" | filled ' + filled + '/' + total + ' (' + pct + '%)' + flag);
@@ -519,7 +525,7 @@ function auditAndFixSheets() {
     // "do headings align with data," checked explicitly, every column,
     // every row, not inferred from text-order matching or a 2-row sample.
     log.push('  -- column-by-column header/data alignment for ' + name + ' --');
-    scanHeaderDataAlignment(sh, exp).forEach(function (line) { log.push(line); });
+    scanHeaderDataAlignment(sh, exp, colTypes[name]).forEach(function (line) { log.push(line); });
   });
 
   // 3. Show day-of-week alongside date for food and exercise logging, so
