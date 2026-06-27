@@ -61,7 +61,9 @@ function initFitness() {
   }
 
   ensure(WEIGHT_SHEET,   ['date', 'weight_lbs']);
-  ensure(FOODS_SHEET,    ['name', 'serving_name', 'serving_size', 'calories_per_serving']);
+  // Header text only -- see the comment above getFoods() for why this list
+  // doesn't need to match that function's internal property names.
+  ensure(FOODS_SHEET,    ['name', 'serving_size', 'serving_note', 'calories_per_serving']);
   ensure(FOOD_LOG_SHEET, ['timestamp', 'date', 'food_name', 'num_servings', 'calories_total', 'meal']);
   ensure(ACT_SHEET,      ['name', 'type', 'unit', 'goal', 'calories', 'cal_weight1', 'cal_per_unit1', 'cal_weight2', 'cal_per_unit2']);
   ensure(ACT_LOG_SHEET,  ['timestamp', 'date', 'activity_name', 'value', 'calories_burned']);
@@ -106,6 +108,14 @@ function getWeightHistory(days) {
 }
 
 // ── Foods config ──────────────────────────────────────────────────────────────
+// Columns (by position, not by header text): name, serving_size, serving_note,
+// calories_per_serving. The serving_name/serving_size identifiers below are
+// just this code's own internal property names -- they are read/written by
+// column INDEX only (r[1], r[2]), never by looking up the sheet's header row,
+// so they don't need to match whatever text is actually in row 1. Don't
+// assume a "mismatch" between these names and the sheet's header text means
+// anything is broken -- check whether the DATA is in the right column
+// (sample real rows), not whether a label matches a JS variable name.
 
 function getFoods() {
   const rows = _sheet(FOODS_SHEET).getDataRange().getValues().slice(1);
@@ -368,9 +378,17 @@ function auditAndFixSheets() {
   //    required text). That's what catches "headers look fine but the data
   //    underneath is garbage" -- header status and data quality are checked
   //    independently, not inferred from each other.
+  //
+  //    IMPORTANT: these lists must match the actual chosen header TEXT in
+  //    each sheet -- they intentionally do NOT have to match the JS property
+  //    names used elsewhere in this file (e.g. getFoods()'s serving_name/
+  //    serving_size are just internal variable names, unrelated to what the
+  //    Foods sheet's header row actually says). Update this list by hand
+  //    whenever you deliberately change a header label; don't assume it can
+  //    be derived from the code that reads the column.
   const expected = {};
   expected[WEIGHT_SHEET]   = ['date', 'weight_lbs'];
-  expected[FOODS_SHEET]    = ['name', 'serving_name', 'serving_size', 'calories_per_serving'];
+  expected[FOODS_SHEET]    = ['name', 'serving_size', 'serving_note', 'calories_per_serving'];
   expected[FOOD_LOG_SHEET] = ['timestamp', 'date', 'food_name', 'num_servings', 'calories_total', 'meal'];
   expected[ACT_SHEET]      = ['name', 'type', 'unit', 'goal', 'calories', 'cal_weight1', 'cal_per_unit1', 'cal_weight2', 'cal_per_unit2'];
   expected[ACT_LOG_SHEET]  = ['timestamp', 'date', 'activity_name', 'value', 'calories_burned'];
