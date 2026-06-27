@@ -457,6 +457,45 @@ function auditAndFixSheets() {
     scanDataQuality(sh, colTypes[name], exp).forEach(function (line) { log.push(line); });
   });
 
+  // 2b. Targeted follow-up checks for the two open questions from the last
+  //     audit run -- read-only, no changes made.
+  (function checkActivitiesDeadColumns() {
+    const sh = ss.getSheetByName(ACT_SHEET);
+    if (!sh) return;
+    const lastRow = sh.getLastRow();
+    const lastCol = sh.getLastColumn();
+    if (lastRow < 2 || lastCol <= 9) return;
+    const data  = sh.getRange(2, 10, lastRow - 1, lastCol - 9).getValues(); // columns J onward
+    const found = [];
+    data.forEach(function (row, idx) {
+      if (row.some(function (c) { return c !== ''; })) found.push(idx + 2);
+    });
+    log.push('Activities: columns J onward (beyond the 9 the code uses) -- ' +
+      (found.length ? found.length + ' row(s) have stray data: rows ' + found.slice(0, 10).join(', ') + ' -- DO NOT delete those columns without reviewing this.'
+                    : 'confirmed empty in all ' + (lastRow - 1) + ' row(s) -- safe to delete.'));
+  })();
+
+  (function checkActivityLogRowShapes() {
+    const sh = ss.getSheetByName(ACT_LOG_SHEET);
+    if (!sh) return;
+    const lastRow = sh.getLastRow();
+    if (lastRow < 2) return;
+    const lastCol = Math.max(5, sh.getLastColumn());
+    const data = sh.getRange(2, 1, lastRow - 1, lastCol).getValues();
+    let fiveCol = 0, threeCol = 0, other = 0;
+    const otherRows = [];
+    data.forEach(function (row, idx) {
+      const nonBlankCount = row.filter(function (c) { return c !== ''; }).length;
+      if (nonBlankCount === 5) fiveCol++;
+      else if (nonBlankCount === 3) threeCol++;
+      else { other++; otherRows.push(idx + 2); }
+    });
+    log.push('ActivityLog row shapes out of ' + (lastRow - 1) + ' total: ' +
+      fiveCol + ' look like full [timestamp,date,name,value,calories_burned] rows, ' +
+      threeCol + ' look like old-style [date,name,value]-only rows, ' +
+      other + ' other/irregular' + (otherRows.length ? ' (rows ' + otherRows.slice(0, 10).join(', ') + (otherRows.length > 10 ? ', ...' : '') + ')' : '') + '.');
+  })();
+
   // 3. Show day-of-week alongside date for food and exercise logging, so
   //    manually scanning/editing rows is easier. Cosmetic only -- the
   //    underlying Date values and all read/write logic are unaffected.
