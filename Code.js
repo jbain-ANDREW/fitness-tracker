@@ -371,13 +371,17 @@ function auditAndFixSheets() {
   //    since silently relabeling could mask a real column-order problem.
   //
   //    Header text alone doesn't prove the data is right (or wrong) -- this
-  //    code reads/writes by fixed column index, never by header name. So
-  //    every sheet (matched or mismatched) also gets: a couple of sample
-  //    data rows, and a scan of EVERY row at the code's actual column
-  //    positions for the type of value the code expects there (date/number/
-  //    required text). That's what catches "headers look fine but the data
-  //    underneath is garbage" -- header status and data quality are checked
-  //    independently, not inferred from each other.
+  //    code reads/writes by fixed column index, never by header name. Three
+  //    independent checks run per sheet, because a text/order comparison of
+  //    the header row by itself CANNOT detect a shift (a blank-header column
+  //    sitting right next to its real, mislabeled data looks identical to a
+  //    blank-header column with no data at all, under a pure text compare):
+  //      a) header text vs. expected, in order (quick signal, not proof)
+  //      b) data-quality scan at the code's fixed column positions, by type
+  //      c) column-by-column header-vs-fill-rate, every column, every row --
+  //         this is the one that actually answers "do headings align with
+  //         data" by checking each column's fill pattern against its header,
+  //         not just comparing header text to a hardcoded list
   //
   //    IMPORTANT: these lists must match the actual chosen header TEXT in
   //    each sheet -- they intentionally do NOT have to match the JS property
@@ -435,6 +439,40 @@ function auditAndFixSheets() {
     return issues.length ? issues : ['  data quality OK (' + (lastRow - 1) + ' row(s) checked)'];
   }
 
+  // The real alignment check: does each column's HEADER agree with whether
+  // that column actually HAS data, across every row (not a sample, not just
+  // type-matching)? This is what a simple "does header text match the
+  // expected list, in order" comparison cannot catch -- a blank-header
+  // column sitting right next to its mislabeled data looks fine under a
+  // pure text/order comparison, but is exactly the shift-by-N bug pattern
+  // found in Activities and ActivityLog. Runs over the FULL actual width
+  // of the sheet (not just the expected column count), so it also catches
+  // shifts into columns the schema doesn't even know about.
+  function scanHeaderDataAlignment(sh, expLabels) {
+    const lastRow = sh.getLastRow();
+    const lastCol = sh.getLastColumn();
+    if (lastCol === 0) return ['  (no columns)'];
+    const headerRow = sh.getRange(1, 1, 1, lastCol).getValues()[0];
+    const dataRows  = lastRow > 1 ? sh.getRange(2, 1, lastRow - 1, lastCol).getValues() : [];
+    const total = dataRows.length;
+    const lines = [];
+    for (let col = 0; col < lastCol; col++) {
+      const header = String(headerRow[col] || '').trim();
+      const filled = dataRows.filter(function (row) { return row[col] !== '' && row[col] != null; }).length;
+      const pct = total ? Math.round((filled / total) * 100) : 0;
+      const expectedHere = col < expLabels.length ? expLabels[col] : '(none expected -- beyond schema)';
+      let flag = '';
+      if (!header && filled > 0) {
+        flag = '  <<== BLANK HEADER BUT HAS DATA in ' + filled + ' row(s) -- likely a missing/shifted label, INVESTIGATE';
+      } else if (header && total > 0 && filled === 0 && col < expLabels.length) {
+        flag = '  <<== HEADER PRESENT BUT NEVER FILLED -- likely this label\'s real data moved to a different column, INVESTIGATE';
+      }
+      lines.push('  col ' + (col + 1) + ': header="' + header + '" | expected="' + expectedHere +
+        '" | filled ' + filled + '/' + total + ' (' + pct + '%)' + flag);
+    }
+    return lines;
+  }
+
   Object.keys(expected).forEach(function (name) {
     const sh = ss.getSheetByName(name);
     if (!sh) { log.push(name + ': MISSING SHEET.'); return; }
@@ -457,7 +495,7 @@ function auditAndFixSheets() {
     const hasExtra = actual.slice(exp.length).some(function (c) { return c !== ''; });
 
     if (!mismatch && !hasExtra) {
-      log.push(name + ': headers OK.');
+      log.push(name + ': headers OK (text matches expected, in order).');
     } else {
       log.push(name + ': MISMATCH -- expected [' + exp.join(', ') + '], found [' + actual.join(', ') + ']. Not auto-fixed -- review before correcting.');
     }
@@ -476,46 +514,13 @@ function auditAndFixSheets() {
     // Data-quality scan at the code's actual column positions -- independent
     // of header match status, so good headers with bad data get caught too.
     scanDataQuality(sh, colTypes[name], exp).forEach(function (line) { log.push(line); });
+
+    // Full column-by-column header/data alignment -- the actual answer to
+    // "do headings align with data," checked explicitly, every column,
+    // every row, not inferred from text-order matching or a 2-row sample.
+    log.push('  -- column-by-column header/data alignment for ' + name + ' --');
+    scanHeaderDataAlignment(sh, exp).forEach(function (line) { log.push(line); });
   });
-
-  // 2b. Targeted follow-up checks for the two open questions from the last
-  //     audit run -- read-only, no changes made.
-  (function checkActivitiesDeadColumns() {
-    const sh = ss.getSheetByName(ACT_SHEET);
-    if (!sh) return;
-    const lastRow = sh.getLastRow();
-    const lastCol = sh.getLastColumn();
-    if (lastRow < 2 || lastCol <= 9) return;
-    const data  = sh.getRange(2, 10, lastRow - 1, lastCol - 9).getValues(); // columns J onward
-    const found = [];
-    data.forEach(function (row, idx) {
-      if (row.some(function (c) { return c !== ''; })) found.push(idx + 2);
-    });
-    log.push('Activities: columns J onward (beyond the 9 the code uses) -- ' +
-      (found.length ? found.length + ' row(s) have stray data: rows ' + found.slice(0, 10).join(', ') + ' -- DO NOT delete those columns without reviewing this.'
-                    : 'confirmed empty in all ' + (lastRow - 1) + ' row(s) -- safe to delete.'));
-  })();
-
-  (function checkActivityLogRowShapes() {
-    const sh = ss.getSheetByName(ACT_LOG_SHEET);
-    if (!sh) return;
-    const lastRow = sh.getLastRow();
-    if (lastRow < 2) return;
-    const lastCol = Math.max(5, sh.getLastColumn());
-    const data = sh.getRange(2, 1, lastRow - 1, lastCol).getValues();
-    let fiveCol = 0, threeCol = 0, other = 0;
-    const otherRows = [];
-    data.forEach(function (row, idx) {
-      const nonBlankCount = row.filter(function (c) { return c !== ''; }).length;
-      if (nonBlankCount === 5) fiveCol++;
-      else if (nonBlankCount === 3) threeCol++;
-      else { other++; otherRows.push(idx + 2); }
-    });
-    log.push('ActivityLog row shapes out of ' + (lastRow - 1) + ' total: ' +
-      fiveCol + ' look like full [timestamp,date,name,value,calories_burned] rows, ' +
-      threeCol + ' look like old-style [date,name,value]-only rows, ' +
-      other + ' other/irregular' + (otherRows.length ? ' (rows ' + otherRows.slice(0, 10).join(', ') + (otherRows.length > 10 ? ', ...' : '') + ')' : '') + '.');
-  })();
 
   // 3. Show day-of-week alongside date for food and exercise logging, so
   //    manually scanning/editing rows is easier. Cosmetic only -- the
