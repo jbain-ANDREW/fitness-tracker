@@ -333,6 +333,82 @@ function _computeTDEE(weight, s) {
   return Math.round(s.tdee1 + slope * (weight - s.weight1));
 }
 
+// ── One-time maintenance (run manually from the Apps Script editor) ───────────
+// Run via: Extensions > Apps Script > select auditAndFixSheets > Run.
+// View results: View > Logs (or the returned value in the execution log).
+
+function auditAndFixSheets() {
+  const ss  = _ss();
+  const log = [];
+
+  // 1. Remove a blank Sheet1 (Google auto-creates one for every new spreadsheet).
+  const sheet1 = ss.getSheetByName('Sheet1');
+  if (!sheet1) {
+    log.push('Sheet1: not present -- OK.');
+  } else {
+    const isBlank = !sheet1.getDataRange().getValues().some(row => row.some(cell => cell !== ''));
+    if (isBlank) {
+      ss.deleteSheet(sheet1);
+      log.push('Sheet1: was blank -- removed.');
+    } else {
+      log.push('Sheet1: NOT blank -- left alone, review manually before deleting.');
+    }
+  }
+
+  // 2. Check every sheet's header row for presence and correctness against the
+  //    canonical schema. Only auto-writes headers when the row is fully blank
+  //    (no data to misalign); any other mismatch is reported, not auto-fixed,
+  //    since silently relabeling could mask a real column-order problem.
+  const expected = {};
+  expected[WEIGHT_SHEET]   = ['date', 'weight_lbs'];
+  expected[FOODS_SHEET]    = ['name', 'serving_name', 'serving_size', 'calories_per_serving'];
+  expected[FOOD_LOG_SHEET] = ['timestamp', 'date', 'food_name', 'num_servings', 'calories_total', 'meal'];
+  expected[ACT_SHEET]      = ['name', 'type', 'unit', 'goal', 'calories', 'cal_weight1', 'cal_per_unit1', 'cal_weight2', 'cal_per_unit2'];
+  expected[ACT_LOG_SHEET]  = ['timestamp', 'date', 'activity_name', 'value', 'calories_burned'];
+
+  Object.keys(expected).forEach(function (name) {
+    const sh = ss.getSheetByName(name);
+    if (!sh) { log.push(name + ': MISSING SHEET.'); return; }
+
+    const exp     = expected[name];
+    const width   = Math.max(exp.length, sh.getLastColumn());
+    const actual  = width > 0 ? sh.getRange(1, 1, 1, width).getValues()[0] : [];
+    const allBlank = actual.every(function (c) { return c === ''; });
+
+    if (sh.getLastRow() === 0 || allBlank) {
+      sh.getRange(1, 1, 1, exp.length).setValues([exp]);
+      log.push(name + ': header row was blank -- wrote expected headers.');
+      return;
+    }
+
+    let mismatch = false;
+    for (let i = 0; i < exp.length; i++) {
+      if (String(actual[i] || '').trim() !== exp[i]) { mismatch = true; break; }
+    }
+    const hasExtra = actual.slice(exp.length).some(function (c) { return c !== ''; });
+
+    if (!mismatch && !hasExtra) {
+      log.push(name + ': headers OK.');
+    } else {
+      log.push(name + ': MISMATCH -- expected [' + exp.join(', ') + '], found [' + actual.join(', ') + ']. Not auto-fixed -- review before correcting.');
+    }
+  });
+
+  // 3. Show day-of-week alongside date for food and exercise logging, so
+  //    manually scanning/editing rows is easier. Cosmetic only -- the
+  //    underlying Date values and all read/write logic are unaffected.
+  [FOOD_LOG_SHEET, ACT_LOG_SHEET].forEach(function (name) {
+    const sh = ss.getSheetByName(name);
+    if (!sh) return;
+    sh.getRange('B2:B').setNumberFormat('ddd yyyy-mm-dd');
+    log.push(name + ": date column (B) formatted as 'ddd yyyy-mm-dd' (e.g. 'Tue 2026-06-27').");
+  });
+
+  const report = log.join('\n');
+  Logger.log(report);
+  return report;
+}
+
 // ── Combined loaders ──────────────────────────────────────────────────────────
 
 function getDateSummary(date) {
