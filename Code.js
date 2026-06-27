@@ -382,7 +382,9 @@ function auditAndFixSheets() {
   colTypes[WEIGHT_SHEET]   = ['date', 'number'];
   colTypes[FOODS_SHEET]    = ['text_required', 'text', 'text', 'number'];
   colTypes[FOOD_LOG_SHEET] = ['datetime', 'date', 'text_required', 'number', 'number', 'text'];
-  colTypes[ACT_SHEET]      = ['text_required', 'text', 'text', 'text', 'number', 'number', 'number', 'number', 'number'];
+  // cal_weight1/cal_per_unit1/cal_weight2/cal_per_unit2 are optional -- only
+  // used by activities with the alternate weight-based calorie formula.
+  colTypes[ACT_SHEET]      = ['text_required', 'text', 'text', 'text', 'number', 'number_optional', 'number_optional', 'number_optional', 'number_optional'];
   colTypes[ACT_LOG_SHEET]  = ['datetime', 'date', 'text_required', 'any', 'number'];
 
   function isOk(val, type) {
@@ -391,6 +393,7 @@ function auditAndFixSheets() {
       return (val instanceof Date) || (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}/.test(val));
     }
     if (type === 'number') return val !== '' && val != null && !isNaN(parseFloat(val));
+    if (type === 'number_optional') return val === '' || val == null || !isNaN(parseFloat(val));
     if (type === 'text_required') return val !== '' && val != null;
     return true; // plain 'text' -- blank is allowed (e.g. optional notes/meal)
   }
@@ -505,6 +508,60 @@ function auditAndFixSheets() {
     sh.getRange('B2:B').setNumberFormat('ddd yyyy-mm-dd');
     log.push(name + ": date column (B) formatted as 'ddd yyyy-mm-dd' (e.g. 'Tue 2026-06-27').");
   });
+
+  const report = log.join('\n');
+  Logger.log(report);
+  return report;
+}
+
+// Fixes the two confirmed header-only problems from auditAndFixSheets()'s
+// last run: Activities' 5 stray blank header cells + 5 dead trailing
+// columns (confirmed empty in all rows), and ActivityLog's scrambled
+// header order (confirmed the data itself already sits at the positions
+// the code expects, for the 67/68 rows with full data). Does NOT touch the
+// single legacy 3-column ActivityLog row, and does NOT touch Foods --
+// those need a decision first, not a structural fix.
+// Run via: Extensions > Apps Script > select fixActivityHeaders > Run.
+function fixActivityHeaders() {
+  const ss  = _ss();
+  const log = [];
+
+  // Activities: rewrite header to the correct 9 columns, then delete the
+  // 5 dead trailing columns (J:N) -- already confirmed empty in every row.
+  (function () {
+    const sh = ss.getSheetByName(ACT_SHEET);
+    const correct = ['name', 'type', 'unit', 'goal', 'calories', 'cal_weight1', 'cal_per_unit1', 'cal_weight2', 'cal_per_unit2'];
+    sh.getRange(1, 1, 1, correct.length).setValues([correct]);
+    if (sh.getLastColumn() > correct.length) {
+      sh.deleteColumns(correct.length + 1, sh.getLastColumn() - correct.length);
+    }
+    log.push('Activities: header fixed to ' + correct.length + ' columns, dead trailing columns removed.');
+  })();
+
+  // ActivityLog: verify columns F:G are empty in every row before touching
+  // anything (same caution as Activities) -- if clean, rewrite header to
+  // the correct 5 columns and delete the dead columns; if not, fix the
+  // header only and leave the extra columns for manual review.
+  (function () {
+    const sh = ss.getSheetByName(ACT_LOG_SHEET);
+    const correct = ['timestamp', 'date', 'activity_name', 'value', 'calories_burned'];
+    const lastRow = sh.getLastRow();
+    const lastCol = sh.getLastColumn();
+    let deadColsClean = true;
+    if (lastRow > 1 && lastCol > correct.length) {
+      const extra = sh.getRange(2, correct.length + 1, lastRow - 1, lastCol - correct.length).getValues();
+      deadColsClean = !extra.some(function (row) { return row.some(function (c) { return c !== ''; }); });
+    }
+    sh.getRange(1, 1, 1, correct.length).setValues([correct]);
+    if (deadColsClean && lastCol > correct.length) {
+      sh.deleteColumns(correct.length + 1, lastCol - correct.length);
+      log.push('ActivityLog: header fixed to ' + correct.length + ' columns, dead trailing columns removed.');
+    } else if (lastCol > correct.length) {
+      log.push('ActivityLog: header fixed, but columns beyond ' + correct.length + ' had data -- left in place, review manually.');
+    } else {
+      log.push('ActivityLog: header fixed to ' + correct.length + ' columns.');
+    }
+  })();
 
   const report = log.join('\n');
   Logger.log(report);
