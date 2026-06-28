@@ -60,7 +60,7 @@ function initFitness() {
     return sh;
   }
 
-  ensure(WEIGHT_SHEET,   ['date', 'weight_lbs']);
+  ensure(WEIGHT_SHEET,   ['date', 'weight_lbs', 'net_calories', 'delta_weight', 'interpolated', 'food_calories', 'cal_deficit']);
   // Header text only -- see the comment above getFoods() for why this list
   // doesn't need to match that function's internal property names.
   ensure(FOODS_SHEET,    ['name', 'serving_size', 'serving_note', 'calories_per_serving']);
@@ -71,19 +71,173 @@ function initFitness() {
   return 'Fitness Tracker initialized. Spreadsheet: ' + ss.getUrl();
 }
 
-// ── Weight — one entry per day (overwrite) ────────────────────────────────────
+// ── Daily stats — fill Weight sheet computed columns ─────────────────────────
+//
+// Writes net_calories (food - activity) and delta_weight (today - yesterday)
+// into Weight cols C and D for every row that has a weight entry.
+// Fixes the Weight header row on every run (handles the 'timestamp' -> 'date' rename).
+// Returns the enriched weight list sorted by date ascending.
+// Restored from Apps Script version 40 -- this and the chain it feeds
+// (logWeight's gap-fill, getWeightHistory, drawCalStats in index.html) were
+// lost from a later edit that was never captured in a git commit.
+
+function computeDailyStats() {
+  const ss     = _ss();
+  const wSheet = ss.getSheetByName(WEIGHT_SHEET);
+  const fSheet = ss.getSheetByName(FOOD_LOG_SHEET);
+  const aSheet = ss.getSheetByName(ACT_LOG_SHEET);
+
+  // Always write the canonical header row (handles prior 'timestamp' label and col count).
+  wSheet.getRange(1, 1, 1, 7).setValues([['date', 'weight_lbs', 'net_calories', 'delta_weight', 'interpolated', 'food_calories', 'cal_deficit']]);
+
+  const wLastRow = wSheet.getLastRow();
+  if (wLastRow < 2) return [];
+
+  // Read all weight data rows (7 cols; C/D/F/G may be blank on first run).
+  const wCols = Math.max(wSheet.getLastColumn(), 7);
+  const wRows = wSheet.getRange(2, 1, wLastRow - 1, wCols).getValues();
+
+  // Sum food calories per date from FoodLog (date = col B = index 1, calories_total = col E = index 4).
+  const foodTotals = {};
+  if (fSheet && fSheet.getLastRow() > 1) {
+    fSheet.getRange(2, 1, fSheet.getLastRow() - 1, 5).getValues().forEach(r => {
+      const d = _dateStr(r[1]);
+      if (d) foodTotals[d] = (foodTotals[d] || 0) + (parseFloat(r[4]) || 0);
+    });
+  }
+
+  // Sum calories burned per date from ActivityLog (date = col B = index 1, calories_burned = col E = index 4).
+  const actTotals = {};
+  if (aSheet && aSheet.getLastRow() > 1) {
+    aSheet.getRange(2, 1, aSheet.getLastRow() - 1, 5).getValues().forEach(r => {
+      const d = _dateStr(r[1]);
+      if (d) actTotals[d] = (actTotals[d] || 0) + (parseFloat(r[4]) || 0);
+    });
+  }
+
+  // Build a sorted list of rows that have valid weight entries.
+  const valid = wRows
+    .map((r, i) => ({ i, date: _dateStr(r[0]), weight: parseFloat(r[1]) || 0 }))
+    .filter(r => r.date && r.weight)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  // Load BMR settings once -- needed to compute per-row TDEE.
+  const bmr = getBMRSettings();
+
+  // Compute all derived columns for each valid row.
+  // net_calories   = food - activity_burn; blank when no food logged.
+  // delta_weight   = today - yesterday (negative = lost); blank for first entry (no prior day).
+  // food_calories  = raw food intake; blank when no food logged.
+  // cal_deficit    = TDEE - net_calories (positive = deficit; negative = surplus).
+  const computed = {};
+  valid.forEach((row, idx) => {
+    const food  = foodTotals[row.date] || 0;
+    const burn  = Math.round(actTotals[row.date] || 0);
+    const net   = food > 0 ? Math.round(food - burn) : '';
+    const delta = idx === 0 ? '' : Math.round((row.weight - valid[idx - 1].weight) * 10) / 10;
+    const tdee  = _computeTDEE(row.weight, bmr);
+    const def   = (net !== '' && tdee) ? Math.round(tdee - net) : '';
+    computed[row.i] = { net, delta, food: food > 0 ? Math.round(food) : '', def };
+  });
+
+  // Write cols C-G in one operation; col E (interpolated) is read from wRows to preserve it.
+  const writeAll = wRows.map((r, i) => [
+    computed[i] ? computed[i].net   : '',
+    computed[i] ? computed[i].delta : '',
+    r[4],
+    computed[i] ? computed[i].food  : '',
+    computed[i] ? computed[i].def   : ''
+  ]);
+  wSheet.getRange(2, 3, writeAll.length, 5).setValues(writeAll);
+
+  // Return enriched list for immediate use by getHistoryPage.
+  return valid.map(row => ({
+    date:          row.date,
+    weight:        Math.round(row.weight * 10) / 10,
+    net_calories:  computed[row.i].net  !== '' ? computed[row.i].net  : null,
+    delta_weight:  computed[row.i].delta !== '' ? computed[row.i].delta : null,
+    food_calories: computed[row.i].food !== '' ? computed[row.i].food : null,
+    cal_deficit:   computed[row.i].def  !== '' ? computed[row.i].def  : null
+  }));
+}
+
+// ── Weight — chronological, one entry per day ────────────────────────────────
+//
+// When a weight is logged for date D:
+//   1. Any gap days between the last real weight and D are forward-filled with
+//      that last real weight and marked interpolated=1.
+//   2. If D already has an interpolated value it is overwritten with the real one.
+//   3. The sheet is always rewritten in chronological order.
 
 function logWeight(weight, date) {
-  const d     = date || _today();
-  const sheet = _sheet(WEIGHT_SHEET);
-  const rows  = sheet.getDataRange().getValues();
-  for (let i = 1; i < rows.length; i++) {
-    if (_dateStr(rows[i][0]) === d) {
-      sheet.getRange(i + 1, 1, 1, 2).setValues([[d, parseFloat(weight)]]);
-      return getDateWeight(d);
+  const d         = date || _today();
+  const newWeight = parseFloat(weight);
+  const sheet     = _sheet(WEIGHT_SHEET);
+  const lastRow   = sheet.getLastRow();
+  const nCols     = Math.max(sheet.getLastColumn(), 7);
+
+  // Read all existing data rows.
+  const existing = lastRow > 1
+    ? sheet.getRange(2, 1, lastRow - 1, nCols).getValues()
+    : [];
+
+  // Build map: date -> { weight, interpolated }
+  const rowMap = {};
+  existing.forEach(r => {
+    const rd = _dateStr(r[0]);
+    if (rd && parseFloat(r[1])) rowMap[rd] = { weight: parseFloat(r[1]), interpolated: !!(r[4]) };
+  });
+
+  // Mark the logged date as a real (non-interpolated) entry.
+  rowMap[d] = { weight: newWeight, interpolated: false };
+
+  // Find the last real weight strictly before d (used as gap-fill value).
+  const prevRealDates = Object.keys(rowMap)
+    .filter(rd => rd < d && !rowMap[rd].interpolated && rowMap[rd].weight)
+    .sort();
+
+  if (prevRealDates.length > 0) {
+    const lastRealDate = prevRealDates[prevRealDates.length - 1];
+    const fillWeight   = rowMap[lastRealDate].weight;
+    const cursor       = new Date(lastRealDate + 'T12:00:00');
+    const target       = new Date(d + 'T12:00:00');
+    cursor.setDate(cursor.getDate() + 1);
+    while (cursor < target) {
+      const gd = Utilities.formatDate(cursor, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      // Only fill days that have no real entry already.
+      if (!rowMap[gd] || rowMap[gd].interpolated) {
+        rowMap[gd] = { weight: fillWeight, interpolated: true };
+      }
+      cursor.setDate(cursor.getDate() + 1);
     }
   }
-  sheet.appendRow([d, parseFloat(weight)]);
+
+  // Update any interpolated rows between d and the next real entry after d.
+  // These were previously forward-filled from an older weight; re-fill from newWeight.
+  const nextRealDates = Object.keys(rowMap)
+    .filter(rd => rd > d && !rowMap[rd].interpolated && rowMap[rd].weight)
+    .sort();
+  const nextRealDate = nextRealDates.length ? nextRealDates[0] : null;
+  const fwdCursor    = new Date(d + 'T12:00:00');
+  const fwdTarget    = nextRealDate ? new Date(nextRealDate + 'T12:00:00') : null;
+  fwdCursor.setDate(fwdCursor.getDate() + 1);
+  while (fwdTarget && fwdCursor < fwdTarget) {
+    const gd = Utilities.formatDate(fwdCursor, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    if (rowMap[gd] && rowMap[gd].interpolated) {
+      rowMap[gd] = { weight: newWeight, interpolated: true };
+    }
+    fwdCursor.setDate(fwdCursor.getDate() + 1);
+  }
+
+  // Rebuild sheet: clear old rows, write all rows sorted by date.
+  const sortedDates = Object.keys(rowMap).sort();
+  const writeRows   = sortedDates.map(rd => [
+    rd, rowMap[rd].weight, '', '', rowMap[rd].interpolated ? 1 : '', '', ''
+  ]);
+
+  if (lastRow > 1) sheet.getRange(2, 1, lastRow - 1, nCols).clearContent();
+  if (writeRows.length > 0) sheet.getRange(2, 1, writeRows.length, 7).setValues(writeRows);
+
   return getDateWeight(d);
 }
 
@@ -100,10 +254,20 @@ function getWeightHistory(days) {
   days = parseInt(days) || 30;
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
-  const rows = _sheet(WEIGHT_SHEET).getDataRange().getValues().slice(1);
+  const sh   = _sheet(WEIGHT_SHEET);
+  const nCol = Math.max(sh.getLastColumn(), 7);
+  const rows = sh.getRange(1, 1, sh.getLastRow(), nCol).getValues().slice(1);
   return rows
     .filter(r => r[1] && new Date(_dateStr(r[0]) + 'T12:00:00') >= cutoff)
-    .map(r => ({ date: _dateStr(r[0]), weight: Math.round(parseFloat(r[1]) * 10) / 10 }))
+    .map(r => ({
+      date:          _dateStr(r[0]),
+      weight:        Math.round(parseFloat(r[1]) * 10) / 10,
+      net_calories:  (r[2] !== '' && r[2] !== null && r[2] !== undefined) ? (parseFloat(r[2]) || null) : null,
+      delta_weight:  (r[3] !== '' && r[3] !== null && r[3] !== undefined) ? parseFloat(r[3]) : null,
+      interpolated:  !!(r[4]),
+      food_calories: (r[5] !== '' && r[5] !== null && r[5] !== undefined) ? (parseFloat(r[5]) || null) : null,
+      cal_deficit:   (r[6] !== '' && r[6] !== null && r[6] !== undefined) ? parseFloat(r[6]) : null
+    }))
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
@@ -391,7 +555,9 @@ function auditAndFixSheets() {
   //    whenever you deliberately change a header label; don't assume it can
   //    be derived from the code that reads the column.
   const expected = {};
-  expected[WEIGHT_SHEET]   = ['date', 'weight_lbs'];
+  // Weight's 5 extra columns are computed and written by computeDailyStats() --
+  // not "extra/beyond schema," they're real, code-managed columns.
+  expected[WEIGHT_SHEET]   = ['date', 'weight_lbs', 'net_calories', 'delta_weight', 'interpolated', 'food_calories', 'cal_deficit'];
   expected[FOODS_SHEET]    = ['name', 'serving_size', 'serving_note', 'calories_per_serving'];
   expected[FOOD_LOG_SHEET] = ['timestamp', 'date', 'food_name', 'num_servings', 'calories_total', 'meal'];
   expected[ACT_SHEET]      = ['name', 'type', 'unit', 'goal', 'calories', 'cal_weight1', 'cal_per_unit1', 'cal_weight2', 'cal_per_unit2'];
@@ -401,7 +567,10 @@ function auditAndFixSheets() {
   // order as `expected` above -- this is what app correctness depends on,
   // independent of whatever the header row says.
   const colTypes = {};
-  colTypes[WEIGHT_SHEET]   = ['date', 'number'];
+  // net_calories/delta_weight/interpolated/food_calories/cal_deficit are all
+  // legitimately blank sometimes (no food logged that day, first-ever entry,
+  // not a gap-filled day, etc.) -- optional, not required.
+  colTypes[WEIGHT_SHEET]   = ['date', 'number', 'number_optional', 'number_optional', 'number_optional', 'number_optional', 'number_optional'];
   colTypes[FOODS_SHEET]    = ['text_required', 'text', 'text', 'number'];
   colTypes[FOOD_LOG_SHEET] = ['datetime', 'date', 'text_required', 'number', 'number', 'text'];
   // cal_weight1/cal_per_unit1/cal_weight2/cal_per_unit2 are optional -- only
@@ -624,11 +793,201 @@ function getDateSummary(date) {
 function getTodaySummary() { return getDateSummary(_today()); }
 
 function getHistoryPage(days) {
+  days = parseInt(days) || 30;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  const co = cutoff.toISOString().slice(0, 10);
+
+  // computeDailyStats writes the computed cols fresh (from the latest
+  // FoodLog/ActivityLog) and returns the full enriched weight list --
+  // filter to the requested window here instead of re-reading the sheet.
+  const weight = computeDailyStats().filter(p => p.date >= co);
+
   return {
-    weight:            getWeightHistory(days),
+    weight,
     food:              getFoodLog(days),
     activities:        getActivityLog(days),
     activities_config: getActivities(),
     goal:              getGoal()
   };
+}
+
+// ── Diagnostics -- run from GAS editor, check Execution Log ──────────────────
+//
+// Mirrors the frontend drawCalStats() logic exactly.
+// Shows raw weight rows, wtNetMap, wtDeltas, and all stat calculations
+// so you can trace where a number diverges from expectations.
+
+function diagCalStats() {
+  const lines = ['=== diagCalStats ===', `today: ${_today()}`];
+
+  // Run computeDailyStats to refresh the sheet, get all weight rows.
+  const allWeight = computeDailyStats();
+  lines.push(`\n--- Weight rows (all, sorted) ---`);
+  allWeight.forEach(p => {
+    lines.push(`  ${p.date}  wt=${p.weight}  net_cal=${p.net_calories ?? '—'}  delta_wt=${p.delta_weight ?? '—'}  interp=${p.interpolated ? 'Y' : 'N'}  food_cal=${p.food_calories ?? '—'}  cal_def=${p.cal_deficit ?? '—'}`);
+  });
+
+  // Build maps exactly as the frontend does.
+  const wtList = allWeight.slice().sort((a, b) => a.date.localeCompare(b.date));
+
+  // wtDefMap: per-row TDEE(that day's weight) - net_calories -- matches Weight tab cal_deficit column.
+  const wtDefMap = {};
+  wtList.forEach(p => {
+    if (p.cal_deficit !== null && p.cal_deficit !== undefined) wtDefMap[p.date] = p.cal_deficit;
+  });
+
+  const wtDeltas = wtList
+    .filter(p => p.delta_weight !== null && p.delta_weight !== undefined)
+    .map(p => ({ date: p.date, delta: -p.delta_weight }));
+
+  lines.push(`\n--- wtDefMap (${Object.keys(wtDefMap).length} entries, TDEE-net_cal) ---`);
+  Object.keys(wtDefMap).sort().forEach(d => {
+    lines.push(`  ${d}  cal_deficit=${wtDefMap[d]}`);
+  });
+
+  lines.push(`\n--- wtDeltas (${wtDeltas.length} entries, positive=lost) ---`);
+  wtDeltas.forEach(d => lines.push(`  ${d.date}  delta=${d.delta.toFixed(3)}`));
+
+  // Stat helpers -- identical logic to frontend.
+  const today = _today();
+  function deficitsIn(since) {
+    return Object.keys(wtDefMap)
+      .filter(ds => ds < today && (!since || ds >= since))
+      .map(ds => wtDefMap[ds]);
+  }
+  function wtDeltasIn(since) {
+    return wtDeltas.filter(d => d.date < today && (!since || d.date >= since));
+  }
+
+  function sinceDate(n) {
+    const d = new Date(_today() + 'T00:00:00');
+    d.setDate(d.getDate() - (n - 1));
+    return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+
+  function avgDailyLoss(since) {
+    const ds = wtDeltasIn(since);
+    if (!ds.length) return null;
+    return ds.reduce((s, d) => s + d.delta, 0) / ds.length;
+  }
+  function avgDailyDeficit(since) {
+    const vals = deficitsIn(since);
+    if (!vals.length) return null;
+    return vals.reduce((a, b) => a + b, 0) / vals.length;
+  }
+  function efficiency(since) {
+    const adl = avgDailyLoss(since);
+    const add = avgDailyDeficit(since);
+    if (adl === null || add === null || !add) return null;
+    return adl / (add / 3500);
+  }
+
+  const windows = [
+    { label: '7 days',   since: sinceDate(7) },
+    { label: '14 days',  since: sinceDate(14) },
+    { label: '30 days',  since: sinceDate(30) },
+    { label: 'All time', since: null },
+  ];
+
+  lines.push('\n--- Calculations ---');
+  windows.forEach(w => {
+    const ds   = wtDeltasIn(w.since);
+    const defs = deficitsIn(w.since);
+    const adl  = avgDailyLoss(w.since);
+    const add  = avgDailyDeficit(w.since);
+    const eff  = efficiency(w.since);
+    lines.push(`\n[${w.label}]  since=${w.since || 'beginning'}`);
+    lines.push(`  weight entries: ${ds.length}   deficit entries: ${defs.length}`);
+    lines.push(`  avg daily weight loss:          ${adl !== null ? adl.toFixed(4) + ' lbs' : '—'}`);
+    lines.push(`  avg weekly weight loss:         ${adl !== null ? (adl * 7).toFixed(3) + ' lbs' : '—'}`);
+    lines.push(`  avg daily deficit:              ${add !== null ? Math.round(add) + ' cal' : '—'}`);
+    lines.push(`  avg daily deficit (in lbs):     ${add !== null ? (add / 3500).toFixed(4) + ' lbs' : '—'}`);
+    lines.push(`  avg weekly deficit (in lbs):    ${add !== null ? (add / 3500 * 7).toFixed(3) + ' lbs' : '—'}`);
+    lines.push(`  efficiency (actual ÷ predicted): ${eff !== null ? eff.toFixed(3) : '—'}`);
+  });
+
+  const report = lines.join('\n');
+  Logger.log(report);
+  return report;
+}
+
+// Compact version of diagCalStats() -- skips the per-row dump (which made
+// the full report too large for the Apps Script log viewer) and only shows
+// the BMR goal setting plus the final calculations per window.
+function diagCalStatsCompact() {
+  const lines = ['=== diagCalStatsCompact ===', `today: ${_today()}`];
+
+  const bmr = getBMRSettings();
+  lines.push(`\n--- BMR settings ---`);
+  lines.push(`  weight1=${bmr.weight1}  tdee1=${bmr.tdee1}  weight2=${bmr.weight2}  tdee2=${bmr.tdee2}  goalLbsWeek=${bmr.goalLbsWeek}`);
+  if (!bmr.goalLbsWeek) {
+    lines.push(`  *** goalLbsWeek is falsy -- the frontend stats panel returns '' entirely when this is unset. ***`);
+  }
+
+  const allWeight = computeDailyStats();
+  const wtList    = allWeight.slice().sort((a, b) => a.date.localeCompare(b.date));
+
+  const wtDefMap = {};
+  wtList.forEach(p => { if (p.cal_deficit !== null && p.cal_deficit !== undefined) wtDefMap[p.date] = p.cal_deficit; });
+
+  const wtDeltas = wtList
+    .filter(p => p.delta_weight !== null && p.delta_weight !== undefined)
+    .map(p => ({ date: p.date, delta: -p.delta_weight }));
+
+  lines.push(`\n--- Counts ---`);
+  lines.push(`  total weight rows: ${wtList.length}   rows with cal_deficit: ${Object.keys(wtDefMap).length}   rows with delta_weight: ${wtDeltas.length}`);
+
+  const today = _today();
+  function deficitsIn(since) {
+    return Object.keys(wtDefMap).filter(ds => ds < today && (!since || ds >= since)).map(ds => wtDefMap[ds]);
+  }
+  function wtDeltasIn(since) {
+    return wtDeltas.filter(d => d.date < today && (!since || d.date >= since));
+  }
+  function sinceDate(n) {
+    const d = new Date(_today() + 'T00:00:00');
+    d.setDate(d.getDate() - (n - 1));
+    return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  function avgDailyLoss(since) {
+    const ds = wtDeltasIn(since);
+    if (!ds.length) return null;
+    return ds.reduce((s, d) => s + d.delta, 0) / ds.length;
+  }
+  function avgDailyDeficit(since) {
+    const vals = deficitsIn(since);
+    if (!vals.length) return null;
+    return vals.reduce((a, b) => a + b, 0) / vals.length;
+  }
+  function efficiency(since) {
+    const adl = avgDailyLoss(since);
+    const add = avgDailyDeficit(since);
+    if (adl === null || add === null || !add) return null;
+    return adl / (add / 3500);
+  }
+
+  const windows = [
+    { label: '7 days',   since: sinceDate(7) },
+    { label: '14 days',  since: sinceDate(14) },
+    { label: '30 days',  since: sinceDate(30) },
+    { label: 'All time', since: null },
+  ];
+
+  lines.push('\n--- Calculations ---');
+  windows.forEach(w => {
+    const ds   = wtDeltasIn(w.since);
+    const defs = deficitsIn(w.since);
+    const adl  = avgDailyLoss(w.since);
+    const add  = avgDailyDeficit(w.since);
+    const eff  = efficiency(w.since);
+    lines.push(`[${w.label}] since=${w.since || 'beginning'}  weight_entries=${ds.length}  deficit_entries=${defs.length}  ` +
+      `avg_weekly_loss=${adl !== null ? (adl * 7).toFixed(2) + 'lbs' : '—'}  ` +
+      `avg_daily_deficit=${add !== null ? Math.round(add) + 'cal' : '—'}  ` +
+      `efficiency=${eff !== null ? eff.toFixed(2) : '—'}`);
+  });
+
+  const report = lines.join('\n');
+  Logger.log(report);
+  return report;
 }
