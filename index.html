@@ -143,6 +143,13 @@
     .chart-controls { display: flex; gap: 10px; margin-bottom: 12px; align-items: flex-end; }
     .chart-controls .col { flex: 1; }
     .chart-controls select, .chart-controls input { font-size: 15px; padding: 8px 10px; }
+    .cal-stat-group       { margin-top: 18px; }
+    .cal-stat-group-label { font-size: 12px; font-weight: 700; color: #8e8e93; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+    .cal-stats       { display: flex; gap: 32px; padding: 4px 2px; }
+    .cal-stat        { display: flex; flex-direction: column; gap: 3px; }
+    .cal-stat-label  { font-size: 13px; color: #8e8e93; font-weight: 500; }
+    .cal-stat-value  { font-size: 36px; font-weight: 700; line-height: 1; }
+    .cal-stat-sub    { font-size: 12px; color: #8e8e93; }
   </style>
 </head>
 <body>
@@ -888,46 +895,165 @@ function drawWeightSvg() {
 }
 
 function renderHistCalories() {
-  document.getElementById('cal-chart-wrap').innerHTML = drawCalSvg();
+  document.getElementById('cal-chart-wrap').innerHTML = drawCalSvg() + drawCalStats();
+}
+
+// Restored from Apps Script version 40 -- this and its Code.js counterparts
+// (computeDailyStats, logWeight's gap-fill, getWeightHistory) were lost from
+// a later edit that was never captured in a git commit. Reports actual
+// weekly weight-loss rate and deficit "efficiency" (actual loss vs. what the
+// logged calorie deficit predicts) over 7/14/30-day and all-time windows.
+function drawCalStats() {
+  if (!S.histData) return '';
+  if (!S.bmr || !S.bmr.goalLbsWeek) return '';
+
+  // Build per-row maps from pre-computed Weight sheet columns.
+  const wtList       = (S.histData.weight || []).slice().sort((a, b) => a.date.localeCompare(b.date));
+  const goalDailyDef = Math.round(((S.bmr && S.bmr.goalLbsWeek) || 0) * 3500 / 7);
+  const wtDefMap     = {};  // date → cal_deficit (TDEE − net_cal per-day weight)
+  const wtGoalMap    = {};  // date → cal_deficit − goal_daily_deficit (positive = ahead of goal)
+  wtList.forEach(p => {
+    if (p.cal_deficit !== null && p.cal_deficit !== undefined) {
+      wtDefMap[p.date]  = p.cal_deficit;
+      wtGoalMap[p.date] = p.cal_deficit - goalDailyDef;
+    }
+  });
+
+  // delta_weight stored as today-yesterday (negative = lost). Negate so positive = lost.
+  const wtDeltas = wtList
+    .filter(p => p.delta_weight !== null && p.delta_weight !== undefined)
+    .map(p => ({ date: p.date, delta: -p.delta_weight }));
+
+  function sinceDate(n) {
+    const d = new Date(TODAY + 'T00:00:00');
+    d.setDate(d.getDate() - (n - 1));
+    return d.toISOString().slice(0, 10);
+  }
+
+  // goal − net_cal for completed days (positive = under goal; today excluded).
+  function deficitsIn(since) {
+    return Object.keys(wtGoalMap)
+      .filter(ds => ds < TODAY && (!since || ds >= since))
+      .map(ds => wtGoalMap[ds]);
+  }
+
+  // TDEE − net_cal for completed days; used only for efficiency calculation.
+  function tdeeDeficitsIn(since) {
+    return Object.keys(wtDefMap)
+      .filter(ds => ds < TODAY && (!since || ds >= since))
+      .map(ds => wtDefMap[ds]);
+  }
+
+  // Weight deltas for completed days only (today excluded to match calorie window).
+  function wtDeltasIn(since) {
+    return wtDeltas.filter(d => d.date < TODAY && (!since || d.date >= since));
+  }
+
+  // Avg daily weight loss (positive = lost) × 7 = avg weekly loss.
+  function avgWeeklyLoss(since) {
+    const ds = wtDeltasIn(since);
+    if (!ds.length) return null;
+    return (ds.reduce((s, d) => s + d.delta, 0) / ds.length) * 7;
+  }
+
+  // Efficiency = avg daily weight loss ÷ (avg daily calorie deficit / 3500).
+  // Both averages over the same date window; no need to annualise.
+  function efficiency(since) {
+    const ds   = wtDeltasIn(since);
+    const defs = tdeeDeficitsIn(since);
+    if (!ds.length || !defs.length) return null;
+    const avgLoss = ds.reduce((s, d) => s + d.delta, 0) / ds.length;
+    const avgDef  = defs.reduce((a, b) => a + b, 0) / defs.length;
+    if (!avgDef) return null;
+    return avgLoss / (avgDef / 3500);
+  }
+
+  function stat(label, value, sub, color) {
+    const v = value === null
+      ? `<div class="cal-stat-value" style="color:#8e8e93">—</div>`
+      : `<div class="cal-stat-value" style="color:${color || '#1c1c1e'}">${value}</div>`;
+    return `<div class="cal-stat"><div class="cal-stat-label">${label}</div>${v}${sub ? `<div class="cal-stat-sub">${sub}</div>` : ''}</div>`;
+  }
+
+  function deficitStat(label, since) {
+    const vals = deficitsIn(since);
+    if (!vals.length) return stat(label, null);
+    const avg = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+    return stat(label, `${avg >= 0 ? '+' : ''}${avg}`, `${vals.length} days`, avg >= 0 ? '#34c759' : '#ff3b30');
+  }
+
+  function weightLossStat(label, since) {
+    const val = avgWeeklyLoss(since);
+    if (val === null) return stat(label, null);
+    const n = wtDeltasIn(since).length;
+    return stat(label, `${val.toFixed(1)} lbs`, `${n} intervals`, val >= 0 ? '#34c759' : '#ff3b30');
+  }
+
+  function efficiencyStat(label, since) {
+    const r = efficiency(since);
+    if (r === null) return stat(label, null);
+    const color = r < 0 ? '#ff3b30' : (r >= 0.7 && r <= 1.4 ? '#34c759' : '#ff9500');
+    return stat(label, parseFloat(r.toPrecision(2)).toString(), null, color);
+  }
+
+  const s7 = sinceDate(8), s14 = sinceDate(15), s30 = sinceDate(31);
+
+  return `
+    <div class="cal-stat-group">
+      <div class="cal-stat-group-label">Avg Daily Deficit vs Goal (cal)</div>
+      <div class="cal-stats">${deficitStat('7 days', s7)}${deficitStat('All time', null)}</div>
+    </div>
+    <div class="cal-stat-group">
+      <div class="cal-stat-group-label">Avg Weekly Weight Loss</div>
+      <div class="cal-stats">${weightLossStat('7 days', s7)}${weightLossStat('All time', null)}</div>
+    </div>
+    <div class="cal-stat-group">
+      <div class="cal-stat-group-label">Deficit Efficiency (actual ÷ predicted)</div>
+      <div class="cal-stats">${efficiencyStat('7 days', s7)}${efficiencyStat('14 days', s14)}${efficiencyStat('30 days', s30)}${efficiencyStat('All time', null)}</div>
+    </div>`;
 }
 
 function drawCalSvg() {
   if (!S.histData) return '<div class="empty">Loading…</div>';
-  const foodData = S.histData.food       || {};
-  const actData  = S.histData.activities || {};
+  const foodData = S.histData.food || {};
   // Prefer BMR-computed target at today's weight; fall back to manual goal
   const goal     = S.cal_target || S.histData.goal || S.goal || 0;
 
+  // Net calories from pre-computed Weight sheet columns.
+  const wtNetMap = {};
+  (S.histData.weight || []).forEach(p => {
+    if (p.net_calories !== null && p.net_calories !== undefined) wtNetMap[p.date] = p.net_calories;
+  });
+
   const days = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(TODAY + 'T12:00:00');
+  for (let i = 7; i >= 1; i--) {
+    const d  = new Date(TODAY + 'T12:00:00');
     d.setDate(d.getDate() - i);
-    const ds         = d.toISOString().slice(0, 10);
-    const food       = (foodData[ds] || {}).total_calories || 0;
-    const actEntries = actData[ds] || [];
-    const burn       = Math.round(actEntries.reduce((s, e) => s + (parseFloat(e.calories_burned) || 0), 0));
-    days.push({ date: ds, food, burn, net: Math.max(food - burn, 0) });
+    const ds   = d.toISOString().slice(0, 10);
+    const food = (foodData[ds] || {}).total_calories || 0;   // orange bar: raw food intake
+    const net  = wtNetMap[ds] !== undefined ? Math.max(wtNetMap[ds], 0) : 0;  // green/red bar: pre-computed net
+    days.push({ date: ds, food, net });
   }
 
-  if (days.every(d => d.food === 0)) return '<div class="empty">No calorie data for the last 7 days.</div>';
+  if (days.every(d => d.food === 0 && d.net === 0)) return '<div class="empty">No calorie data for the last 7 days.</div>';
 
-  const W = 440, H = 180, ML = 40, MR = 10, MT = 22, MB = 28;
+  const W = 440, H = 200, ML = 50, MR = 10, MT = 26, MB = 40;
   const PW = W - ML - MR, PH = H - MT - MB;
-  const maxCal = Math.max(...days.map(d => d.food), goal || 0, 500);
+  const maxCal = 3000;
   const slotW   = PW / 7;
-  // Within each slot: dayPad | foodW | intraGap | netW | (right gap = inter-day space)
   const dayPad   = slotW * 0.10;
   const foodW    = slotW * 0.26;
   const intraGap = slotW * 0.05;
   const netW     = slotW * 0.36;
 
+  const yTicks = [0, 1000, 2000, 3000];
+  const yLabels = ['0', '1k', '2k', '3k'];
   let yLines = '';
-  for (let i = 0; i <= 3; i++) {
-    const cal = Math.round(maxCal * i / 3 / 100) * 100;
-    const y   = MT + PH - (cal / maxCal) * PH;
+  yTicks.forEach((cal, i) => {
+    const y = MT + PH - (cal / maxCal) * PH;
     yLines += `<line x1="${ML}" y1="${y.toFixed(1)}" x2="${W - MR}" y2="${y.toFixed(1)}" stroke="#e5e5ea" stroke-width="1"/>`;
-    yLines += `<text x="${ML - 4}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="10" fill="#8e8e93">${cal}</text>`;
-  }
+    yLines += `<text x="${ML - 6}" y="${(y + 6).toFixed(1)}" text-anchor="end" font-size="16" fill="#8e8e93">${yLabels[i]}</text>`;
+  });
 
   let bars = '';
 
@@ -965,12 +1091,12 @@ function drawCalSvg() {
 
       // Net label above right bar
       const lCol = (goal > 0 ? d.net < goal : true) ? '#34c759' : '#ff3b30';
-      bars += `<text x="${(rx + netW / 2).toFixed(1)}" y="${(ny - 3).toFixed(1)}" text-anchor="middle" font-size="10" fill="${lCol}" font-weight="600">${d.net}</text>`;
+      bars += `<text x="${(rx + netW / 2).toFixed(1)}" y="${(ny - 3).toFixed(1)}" text-anchor="middle" font-size="14" fill="${lCol}" font-weight="600">${d.net}</text>`;
     }
 
     // Day label centered under the bar group
     const dow = ['Su','Mo','Tu','We','Th','Fr','Sa'][new Date(d.date + 'T12:00:00').getDay()];
-    bars += `<text x="${cx.toFixed(1)}" y="${H - 4}" text-anchor="middle" font-size="11" fill="#8e8e93">${dow}</text>`;
+    bars += `<text x="${cx.toFixed(1)}" y="${H - 6}" text-anchor="middle" font-size="16" fill="#8e8e93">${dow}</text>`;
   });
 
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;">${yLines}${bars}</svg>`;
