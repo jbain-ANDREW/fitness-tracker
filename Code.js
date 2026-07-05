@@ -994,23 +994,27 @@ function diagCalStatsCompact() {
 
 // ── Medication Inventory ──────────────────────────────────────────────────────
 //
-// Three sheets:
-//   MedSyringes — syringe_id | date_received | order_id | date_depleted | notes
-//   MedLog      — timestamp | date | type ('shot'|'received') | qty | notes | syringe_id
-//   MedOrders   — order_id | date_ordered | date_expected | date_arrived | qty_syringes | notes
+// Two sheets — syringe_id is the key that links every transaction:
 //
-// syringe_id is a sequential integer assigned at receipt (1, 2, 3, …).
-// shots_used per syringe is computed by counting 'shot' rows in MedLog for
-// that syringe_id — never stored redundantly.
-// MedLog col 5 (syringe_id) is new; old rows without it are treated as
-// unassigned (syringe_id = '').
+//   MedSyringes — one row per physical syringe, full lifecycle in one place
+//     syringe_id | order_id | date_ordered | date_expected | date_received | date_depleted | notes
+//     Status derived from date columns:
+//       date_ordered set, date_received blank  → On order / in transit
+//       date_received set, date_depleted blank → Reserve or current (shots computed from MedShots)
+//       date_depleted set                      → Depleted
+//
+//   MedShots — one row per injection
+//     timestamp | date | syringe_id | shot_num | notes
+//     shot_num (1–4) is computed at log time from existing rows for that syringe.
+//
+// MedLog and MedOrders (from earlier versions) are superseded by this design.
+// Re-run initMeds() to create / reset sheet headers.
 
-const MED_SYR_SHEET     = 'MedSyringes';
-const MED_LOG_SHEET     = 'MedLog';
-const MED_ORDERS_SHEET  = 'MedOrders';
+const MED_SYR_SHEET    = 'MedSyringes';
+const MED_SHOTS_SHEET  = 'MedShots';
 const SHOTS_PER_SYRINGE = 4;
 
-// Run once from the Apps Script editor (or re-run safely — uses ensure pattern).
+// Run once from the Apps Script editor (safe to re-run — uses ensure pattern).
 function initMeds() {
   const ss = _ss();
   function ensure(name, headers) {
@@ -1019,10 +1023,9 @@ function initMeds() {
     if (sh.getLastRow() === 0) sh.appendRow(headers);
     return sh;
   }
-  ensure(MED_SYR_SHEET,    ['syringe_id', 'date_received', 'order_id', 'date_depleted', 'notes']);
-  ensure(MED_LOG_SHEET,    ['timestamp', 'date', 'type', 'qty', 'notes', 'syringe_id']);
-  ensure(MED_ORDERS_SHEET, ['order_id', 'date_ordered', 'date_expected', 'date_arrived', 'qty_syringes', 'notes']);
-  return 'Med sheets ready.';
+  ensure(MED_SYR_SHEET,   ['syringe_id', 'order_id', 'date_ordered', 'date_expected', 'date_received', 'date_depleted', 'notes']);
+  ensure(MED_SHOTS_SHEET, ['timestamp', 'date', 'syringe_id', 'shot_num', 'notes']);
+  return 'Med sheets ready (MedSyringes, MedShots).';
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
@@ -1035,78 +1038,91 @@ function _nextSyringeId() {
   return Math.max(...rows.map(r => parseInt(r[0]) || 0)) + 1;
 }
 
-function _shotsPerSyringe() {
-  // Returns { syringeId: shotsUsed } map from MedLog shot rows.
-  const sh = _sheet(MED_LOG_SHEET);
-  if (!sh) return {};
+function _shotsBySyringe() {
+  // Returns { syringeId: shotsUsed } count from MedShots.
+  const sh = _sheet(MED_SHOTS_SHEET);
+  if (!sh || sh.getLastRow() < 2) return {};
   const counts = {};
-  sh.getDataRange().getValues().slice(1).filter(r => r[0] && String(r[2]) === 'shot').forEach(r => {
-    const sid = String(r[5] || '');
+  sh.getDataRange().getValues().slice(1).filter(r => r[0]).forEach(r => {
+    const sid = String(parseInt(r[2]) || '');
     if (sid) counts[sid] = (counts[sid] || 0) + 1;
   });
   return counts;
+}
+
+function _readSyringes(shotCounts) {
+  // MedSyringes cols: [0]syringe_id [1]order_id [2]date_ordered [3]date_expected
+  //                   [4]date_received [5]date_depleted [6]notes
+  const sh = _sheet(MED_SYR_SHEET);
+  if (!sh || sh.getLastRow() < 2) return [];
+  return sh.getDataRange().getValues().slice(1)
+    .filter(r => r[0])
+    .map(r => ({
+      syringe_id:    parseInt(r[0]),
+      order_id:      String(r[1] || ''),
+      date_ordered:  _dateStr(r[2]),
+      date_expected: _dateStr(r[3]),
+      date_received: _dateStr(r[4]),
+      date_depleted: _dateStr(r[5]),
+      notes:         String(r[6] || ''),
+      shots_used:    (shotCounts || {})[String(parseInt(r[0]))] || 0
+    }))
+    .sort((a, b) => a.syringe_id - b.syringe_id);
 }
 
 // ── Status ────────────────────────────────────────────────────────────────────
 
 function getMedStatus() {
   const syrSheet   = _sheet(MED_SYR_SHEET);
-  const orderSheet = _sheet(MED_ORDERS_SHEET);
-  if (!syrSheet || !orderSheet) return { error: 'Run initMeds() first.' };
+  const shotsSheet = _sheet(MED_SHOTS_SHEET);
+  if (!syrSheet || !shotsSheet) return { error: 'Run initMeds() first.' };
 
-  const shotCounts = _shotsPerSyringe();
+  const shotCounts = _shotsBySyringe();
+  const syringes   = _readSyringes(shotCounts);
 
-  const syringes = syrSheet.getDataRange().getValues().slice(1)
-    .filter(r => r[0])
-    .map(r => ({
-      syringe_id:    parseInt(r[0]),
-      date_received: _dateStr(r[1]),
-      order_id:      String(r[2] || ''),
-      date_depleted: _dateStr(r[3]),
-      notes:         String(r[4] || ''),
-      shots_used:    shotCounts[String(parseInt(r[0]))] || 0
-    }))
-    .sort((a, b) => a.syringe_id - b.syringe_id);
+  // On order: date_ordered set, date_received blank
+  const onOrder = syringes.filter(s => s.date_ordered && !s.date_received);
 
-  // Current syringe: lowest numbered, not fully depleted
-  const activeSyringes = syringes.filter(s => !s.date_depleted && s.shots_used < SHOTS_PER_SYRINGE);
-  const currentSyringe = activeSyringes.length ? activeSyringes[0] : null;
-  const currentShots   = currentSyringe ? SHOTS_PER_SYRINGE - currentSyringe.shots_used : 0;
+  // In hand: date_received set, not depleted
+  const inHand = syringes.filter(s => s.date_received && !s.date_depleted);
 
-  // Reserve: received but not yet opened (shots_used === 0), excluding the current syringe
-  const reserve = syringes.filter(s =>
-    !s.date_depleted && s.shots_used === 0 && (!currentSyringe || s.syringe_id !== currentSyringe.syringe_id)
+  // Current syringe: in-hand, lowest ID, with shots remaining
+  const active = inHand.filter(s => s.shots_used < SHOTS_PER_SYRINGE);
+  const current = active.length ? active[0] : null;
+  const currentShots = current ? SHOTS_PER_SYRINGE - current.shots_used : 0;
+
+  // Reserve: in-hand, not started (shots_used === 0), not the current one
+  const reserve = inHand.filter(s =>
+    s.shots_used === 0 && (!current || s.syringe_id !== current.syringe_id)
   );
 
-  // Last injection date
-  const logRows = _sheet(MED_LOG_SHEET).getDataRange().getValues().slice(1)
-    .filter(r => r[0] && String(r[2]) === 'shot');
-  const lastShotDate = logRows.reduce((max, r) => {
-    const d = _dateStr(r[1]);
-    return d > max ? d : max;
-  }, '');
-
-  const allOrders = orderSheet.getDataRange().getValues().slice(1)
+  // Last injection date from MedShots
+  const lastShotDate = shotsSheet.getDataRange().getValues().slice(1)
     .filter(r => r[0])
-    .map(r => ({
-      order_id:      String(r[0]),
-      date_ordered:  _dateStr(r[1]),
-      date_expected: _dateStr(r[2]),
-      date_arrived:  _dateStr(r[3]),
-      qty:           parseInt(r[4]) || 1,
-      notes:         String(r[5] || '')
-    })).reverse();
+    .reduce((max, r) => { const d = _dateStr(r[1]); return d > max ? d : max; }, '');
+
+  // Group on-order syringes by order_id for the UI
+  const orderGroups = {};
+  onOrder.forEach(s => {
+    const oid = s.order_id || s.date_ordered;
+    if (!orderGroups[oid]) orderGroups[oid] = {
+      order_id:      oid,
+      date_ordered:  s.date_ordered,
+      date_expected: s.date_expected,
+      syringe_ids:   []
+    };
+    orderGroups[oid].syringe_ids.push(s.syringe_id);
+  });
 
   return {
-    current_syringe_id:  currentSyringe ? currentSyringe.syringe_id : null,
+    current_syringe_id:  current ? current.syringe_id : null,
     current_shots:       currentShots,
     shots_per_syringe:   SHOTS_PER_SYRINGE,
     syringes_in_reserve: reserve.length,
     reserve_ids:         reserve.map(s => s.syringe_id),
+    on_order:            Object.values(orderGroups).sort((a, b) => b.date_ordered.localeCompare(a.date_ordered)),
     last_shot_date:      lastShotDate,
-    syringes:            syringes,
-    open_orders:         allOrders.filter(o => !o.date_arrived),
-    all_orders:          allOrders
+    syringes:            syringes
   };
 }
 
@@ -1114,78 +1130,106 @@ function getMedStatus() {
 
 function logMedShot(date, syringeId, notes) {
   const d   = date || _today();
-  const sid = syringeId ? parseInt(syringeId) : null;
-  _sheet(MED_LOG_SHEET).appendRow([_ts(), d, 'shot', 1, notes || '', sid || '']);
+  const sid = parseInt(syringeId);
+  if (!sid) throw new Error('syringe_id required');
 
-  // Mark syringe depleted if this was the 4th shot
-  if (sid) {
-    const counts = _shotsPerSyringe();
-    if ((counts[String(sid)] || 0) >= SHOTS_PER_SYRINGE) {
-      const syrSheet = _sheet(MED_SYR_SHEET);
-      const rows     = syrSheet.getDataRange().getValues();
-      for (let i = 1; i < rows.length; i++) {
-        if (parseInt(rows[i][0]) === sid && !rows[i][3]) {
-          syrSheet.getRange(i + 1, 4).setValue(d);
-          break;
-        }
+  const shotNum = (_shotsBySyringe()[String(sid)] || 0) + 1;
+  _sheet(MED_SHOTS_SHEET).appendRow([_ts(), d, sid, shotNum, notes || '']);
+
+  // Auto-deplete after the last shot
+  if (shotNum >= SHOTS_PER_SYRINGE) {
+    const syrSheet = _sheet(MED_SYR_SHEET);
+    const rows = syrSheet.getDataRange().getValues();
+    for (let i = 1; i < rows.length; i++) {
+      if (parseInt(rows[i][0]) === sid && !rows[i][5]) {
+        syrSheet.getRange(i + 1, 6).setValue(d);
+        break;
       }
     }
   }
   return getMedStatus();
 }
 
-function logMedReceived(date, qty, orderId, notes) {
-  const d       = date || _today();
-  const n       = parseInt(qty) || 1;
-  const syrSheet = _sheet(MED_SYR_SHEET);
-  let nextId     = _nextSyringeId();
-  const newIds   = [];
-  for (let i = 0; i < n; i++) {
-    syrSheet.appendRow([nextId, d, orderId || '', '', notes || '']);
-    newIds.push(nextId++);
-  }
-  // Also log a 'received' event in MedLog for the history view
-  _sheet(MED_LOG_SHEET).appendRow([_ts(), d, 'received', n, notes || '', newIds.join(',')]);
-  return getMedStatus();
-}
-
-function saveMedOrder(dateOrdered, dateExpected, qty, notes) {
+// Place an order — creates MedSyringes rows immediately with order dates,
+// date_received blank (they're in transit). Syringe IDs are assigned now.
+function placeMedOrder(dateOrdered, dateExpected, qty, notes) {
   const orderId = _ts();
-  _sheet(MED_ORDERS_SHEET).appendRow([orderId, dateOrdered || _today(), dateExpected || '', '', parseInt(qty) || 1, notes || '']);
+  const syrSheet = _sheet(MED_SYR_SHEET);
+  let nextId = _nextSyringeId();
+  const n = parseInt(qty) || 1;
+  for (let i = 0; i < n; i++) {
+    // cols: syringe_id | order_id | date_ordered | date_expected | date_received | date_depleted | notes
+    syrSheet.appendRow([nextId++, orderId, dateOrdered || _today(), dateExpected || '', '', '', notes || '']);
+  }
   return getMedStatus();
 }
 
-function markMedOrderArrived(orderId, dateArrived, qty) {
-  const sheet = _sheet(MED_ORDERS_SHEET);
-  const rows  = sheet.getDataRange().getValues();
-  let n = parseInt(qty) || 1;
+// Mark one or more syringes as received (sets date_received).
+function receiveMedSyringes(syringeIds, dateReceived) {
+  const arrived   = dateReceived || _today();
+  const syrSheet  = _sheet(MED_SYR_SHEET);
+  const rows      = syrSheet.getDataRange().getValues();
+  const idSet     = new Set(syringeIds.map(id => parseInt(id)));
   for (let i = 1; i < rows.length; i++) {
-    if (String(rows[i][0]) === String(orderId)) {
-      const arrived = dateArrived || _today();
-      n = parseInt(qty) || parseInt(rows[i][4]) || 1;
-      sheet.getRange(i + 1, 4).setValue(arrived);
-      logMedReceived(arrived, n, orderId, '');
-      break;
+    if (idSet.has(parseInt(rows[i][0])) && !rows[i][4]) {
+      syrSheet.getRange(i + 1, 5).setValue(arrived);
     }
   }
   return getMedStatus();
 }
 
-function getMedLog(days) {
-  const logSheet = _sheet(MED_LOG_SHEET);
-  if (!logSheet) return [];
-  days = parseInt(days) || 60;
+// Receive all syringes from a given order at once.
+function receiveMedOrder(orderId, dateReceived) {
+  const arrived  = dateReceived || _today();
+  const syrSheet = _sheet(MED_SYR_SHEET);
+  const rows     = syrSheet.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][1]) === String(orderId) && !rows[i][4]) {
+      syrSheet.getRange(i + 1, 5).setValue(arrived);
+    }
+  }
+  return getMedStatus();
+}
+
+function getMedHistory(days) {
+  const shotsSheet = _sheet(MED_SHOTS_SHEET);
+  const syrSheet   = _sheet(MED_SYR_SHEET);
+  if (!shotsSheet || !syrSheet) return [];
+
+  days = parseInt(days) || 90;
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
-  return logSheet.getDataRange().getValues().slice(1)
+
+  const shots = shotsSheet.getDataRange().getValues().slice(1)
     .filter(r => r[0] && new Date(_dateStr(r[1]) + 'T12:00:00') >= cutoff)
     .map(r => ({
       timestamp:  _tsStr(r[0]),
       date:       _dateStr(r[1]),
-      type:       String(r[2]),
-      qty:        parseInt(r[3]) || 1,
+      syringe_id: parseInt(r[2]),
+      shot_num:   parseInt(r[3]),
       notes:      String(r[4] || ''),
-      syringe_id: r[5] ? String(r[5]) : ''
-    }))
-    .reverse();
+      event:      'shot'
+    }));
+
+  const receives = syrSheet.getDataRange().getValues().slice(1)
+    .filter(r => r[0] && r[4] && new Date(_dateStr(r[4]) + 'T12:00:00') >= cutoff)
+    .map(r => ({
+      date:       _dateStr(r[4]),
+      syringe_id: parseInt(r[0]),
+      order_id:   String(r[1] || ''),
+      event:      'received'
+    }));
+
+  const orders = syrSheet.getDataRange().getValues().slice(1)
+    .filter(r => r[0] && r[2] && new Date(_dateStr(r[2]) + 'T12:00:00') >= cutoff)
+    .reduce((acc, r) => {
+      const oid = String(r[1] || r[2]);
+      if (!acc[oid]) acc[oid] = { date: _dateStr(r[2]), order_id: oid, syringe_ids: [], event: 'ordered' };
+      acc[oid].syringe_ids.push(parseInt(r[0]));
+      return acc;
+    }, {});
+
+  return [...shots, ...receives, ...Object.values(orders)]
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+    .slice(0, 60);
 }
