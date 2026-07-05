@@ -1,10 +1,13 @@
 // Fitness Tracker — GAS Web App
 
-const WEIGHT_SHEET   = 'Weight';
-const FOODS_SHEET    = 'Foods';
-const FOOD_LOG_SHEET = 'FoodLog';
-const ACT_SHEET      = 'Activities';
-const ACT_LOG_SHEET  = 'ActivityLog';
+const WEIGHT_SHEET    = 'Weight';
+const FOODS_SHEET     = 'Foods';
+const FOOD_LOG_SHEET  = 'FoodLog';
+const ACT_SHEET       = 'Activities';
+const ACT_LOG_SHEET   = 'ActivityLog';
+const MED_SYR_SHEET   = 'MedSyringes';
+const MED_SHOTS_SHEET = 'MedShots';
+const SHOTS_PER_SYRINGE = 4;
 
 // ── Sheet schemas — single source of truth ────────────────────────────────────
 // Column order defined here drives: initFitness/initMeds header rows,
@@ -1101,10 +1104,6 @@ function diagCalStatsCompact() {
 //
 // MedLog and MedOrders (from earlier versions) are superseded by this design.
 // Re-run initMeds() to create / reset sheet headers.
-
-const MED_SYR_SHEET    = 'MedSyringes';
-const MED_SHOTS_SHEET  = 'MedShots';
-const SHOTS_PER_SYRINGE = 4;
 
 // Run from the Apps Script editor to wipe ALL med data and rebuild clean sheets.
 // Deletes MedSyringes and MedShots (plus the legacy MedLog and MedOrders sheets
