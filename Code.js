@@ -1014,6 +1014,19 @@ const MED_SYR_SHEET    = 'MedSyringes';
 const MED_SHOTS_SHEET  = 'MedShots';
 const SHOTS_PER_SYRINGE = 4;
 
+// Run from the Apps Script editor to wipe ALL med data and rebuild clean sheets.
+// Deletes MedSyringes and MedShots (plus the legacy MedLog and MedOrders sheets
+// if they still exist), then calls initMeds() to create fresh sheets with the
+// correct headers. IRREVERSIBLE — only run when you are sure the data is gone.
+function resetMeds() {
+  const ss = _ss();
+  ['MedSyringes', 'MedShots', 'MedLog', 'MedOrders'].forEach(name => {
+    const sh = ss.getSheetByName(name);
+    if (sh) ss.deleteSheet(sh);
+  });
+  return initMeds();
+}
+
 // Run once from the Apps Script editor (safe to re-run — uses ensure pattern).
 function initMeds() {
   const ss = _ss();
