@@ -991,3 +991,119 @@ function diagCalStatsCompact() {
   Logger.log(report);
   return report;
 }
+
+// ── Medication Inventory ──────────────────────────────────────────────────────
+//
+// Tracks injectable medication inventory: shots taken, syringes received,
+// and orders placed/arrived. Two sheets:
+//   MedLog    — timestamp | date | type ('shot'|'received') | qty | notes
+//   MedOrders — order_id  | date_ordered | date_expected | date_arrived | qty_syringes | notes
+
+const MED_LOG_SHEET     = 'MedLog';
+const MED_ORDERS_SHEET  = 'MedOrders';
+const SHOTS_PER_SYRINGE = 4;
+
+// Run once from the Apps Script editor after deploying this version.
+function initMeds() {
+  const ss = _ss();
+  function ensure(name, headers) {
+    let sh = ss.getSheetByName(name);
+    if (!sh) sh = ss.insertSheet(name);
+    if (sh.getLastRow() === 0) sh.appendRow(headers);
+    return sh;
+  }
+  ensure(MED_LOG_SHEET,    ['timestamp', 'date', 'type', 'qty', 'notes']);
+  ensure(MED_ORDERS_SHEET, ['order_id', 'date_ordered', 'date_expected', 'date_arrived', 'qty_syringes', 'notes']);
+  return 'Med sheets ready.';
+}
+
+function getMedStatus() {
+  const logSheet   = _sheet(MED_LOG_SHEET);
+  const orderSheet = _sheet(MED_ORDERS_SHEET);
+  if (!logSheet || !orderSheet) return { error: 'Run initMeds() first.' };
+
+  let shotsReceived = 0, shotsUsed = 0, lastShotDate = '';
+  logSheet.getDataRange().getValues().slice(1).filter(r => r[0]).forEach(r => {
+    const type = String(r[2]);
+    const qty  = parseInt(r[3]) || 1;
+    if (type === 'received') shotsReceived += qty * SHOTS_PER_SYRINGE;
+    if (type === 'shot') {
+      shotsUsed++;
+      const d = _dateStr(r[1]);
+      if (d > lastShotDate) lastShotDate = d;
+    }
+  });
+
+  const shotsRemaining      = shotsReceived - shotsUsed;
+  const currentSyringeShots = shotsRemaining > 0 ? ((shotsRemaining - 1) % SHOTS_PER_SYRINGE) + 1 : 0;
+  const syringesInReserve   = shotsRemaining > 0 ? Math.floor((shotsRemaining - 1) / SHOTS_PER_SYRINGE) : 0;
+
+  const allOrders = orderSheet.getDataRange().getValues().slice(1)
+    .filter(r => r[0])
+    .map(r => ({
+      order_id:      String(r[0]),
+      date_ordered:  _dateStr(r[1]),
+      date_expected: _dateStr(r[2]),
+      date_arrived:  _dateStr(r[3]),
+      qty:           parseInt(r[4]) || 1,
+      notes:         String(r[5] || '')
+    })).reverse();
+
+  return {
+    shots_remaining:     shotsRemaining,
+    current_syringe:     currentSyringeShots,
+    syringes_in_reserve: syringesInReserve,
+    shots_per_syringe:   SHOTS_PER_SYRINGE,
+    last_shot_date:      lastShotDate,
+    open_orders:         allOrders.filter(o => !o.date_arrived),
+    all_orders:          allOrders
+  };
+}
+
+function logMedShot(date, notes) {
+  _sheet(MED_LOG_SHEET).appendRow([_ts(), date || _today(), 'shot', 1, notes || '']);
+  return getMedStatus();
+}
+
+function logMedReceived(date, qty, notes) {
+  _sheet(MED_LOG_SHEET).appendRow([_ts(), date || _today(), 'received', parseInt(qty) || 1, notes || '']);
+  return getMedStatus();
+}
+
+function saveMedOrder(dateOrdered, dateExpected, qty, notes) {
+  _sheet(MED_ORDERS_SHEET).appendRow([_ts(), dateOrdered || _today(), dateExpected || '', '', parseInt(qty) || 1, notes || '']);
+  return getMedStatus();
+}
+
+function markMedOrderArrived(orderId, dateArrived, qty) {
+  const sheet = _sheet(MED_ORDERS_SHEET);
+  const rows  = sheet.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === String(orderId)) {
+      const arrived = dateArrived || _today();
+      const n       = parseInt(qty) || parseInt(rows[i][4]) || 1;
+      sheet.getRange(i + 1, 4).setValue(arrived);
+      _sheet(MED_LOG_SHEET).appendRow([_ts(), arrived, 'received', n, 'arrived from order']);
+      break;
+    }
+  }
+  return getMedStatus();
+}
+
+function getMedLog(days) {
+  const logSheet = _sheet(MED_LOG_SHEET);
+  if (!logSheet) return [];
+  days = parseInt(days) || 60;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  return logSheet.getDataRange().getValues().slice(1)
+    .filter(r => r[0] && new Date(_dateStr(r[1]) + 'T12:00:00') >= cutoff)
+    .map(r => ({
+      timestamp: _tsStr(r[0]),
+      date:      _dateStr(r[1]),
+      type:      String(r[2]),
+      qty:       parseInt(r[3]) || 1,
+      notes:     String(r[4] || '')
+    }))
+    .reverse();
+}
