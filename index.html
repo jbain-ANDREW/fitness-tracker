@@ -443,9 +443,10 @@
     <label>Log Injection</label>
     <div class="row" style="margin-bottom:10px;">
       <div class="col"><label>Date</label><input type="date" id="med-shot-date"></div>
-      <button class="small blue" onclick="medLogShot()" style="padding:12px 18px;font-size:16px;align-self:flex-end;">Log Shot</button>
+      <div class="col"><label>Syringe</label><select id="med-shot-syringe"><option value="">—</option></select></div>
     </div>
-    <input type="text" id="med-shot-notes" placeholder="Notes (optional)">
+    <input type="text" id="med-shot-notes" placeholder="Notes (optional)" style="margin-bottom:10px;">
+    <button class="primary" onclick="medLogShot()">Log Injection</button>
   </div>
 
   <!-- Receive syringes -->
@@ -1442,6 +1443,8 @@ function deleteActivity(name) {
 
 // ── Meds ──────────────────────────────────────────────────────────────────────
 
+let _medStatus = null;  // cached after last load, used to pre-fill syringe id
+
 function loadMeds() {
   const today = new Date().toISOString().substring(0, 10);
   ['med-shot-date', 'med-rx-date', 'med-ord-ordered'].forEach(id => {
@@ -1450,7 +1453,7 @@ function loadMeds() {
   });
   document.getElementById('med-status-card').innerHTML = '<div class="empty">Loading…</div>';
   google.script.run
-    .withSuccessHandler(status => { renderMedStatus(status); })
+    .withSuccessHandler(st => { _medStatus = st; renderMedStatus(st); })
     .withFailureHandler(e => toast('Meds error: ' + e.message))
     .getMedStatus();
   google.script.run
@@ -1459,64 +1462,112 @@ function loadMeds() {
     .getMedLog(60);
 }
 
+function _fmt(dateStr) {
+  return dateStr ? new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
+}
+
 function renderMedStatus(st) {
   if (st.error) {
-    document.getElementById('med-status-card').innerHTML =
-      `<div class="empty">⚠️ ${st.error}</div>`;
+    document.getElementById('med-status-card').innerHTML = `<div class="empty">⚠️ ${st.error}</div>`;
     return;
   }
+
+  // Update syringe selector on the shot form
+  const sel = document.getElementById('med-shot-syringe');
+  if (sel && st.syringes) {
+    const active = st.syringes.filter(s => !s.date_depleted);
+    sel.innerHTML = active.length
+      ? active.map(s => {
+          const rem = st.shots_per_syringe - s.shots_used;
+          const label = `#${s.syringe_id} (${rem} shot${rem !== 1 ? 's' : ''} left)`;
+          return `<option value="${s.syringe_id}" ${s.syringe_id === st.current_syringe_id ? 'selected' : ''}>${label}</option>`;
+        }).join('')
+      : '<option value="">No syringes on hand</option>';
+  }
+
   const pips = Array.from({ length: st.shots_per_syringe }, (_, i) =>
-    `<span style="font-size:28px;line-height:1;">${i < st.current_syringe ? '●' : '○'}</span>`
+    `<span style="font-size:28px;line-height:1;">${i < st.current_shots ? '●' : '○'}</span>`
   ).join('');
-  const lastShot = st.last_shot_date
-    ? new Date(st.last_shot_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+
+  const reserveLabel = st.reserve_ids && st.reserve_ids.length
+    ? `#${st.reserve_ids.join(', #')}`
     : '—';
+
   const openHtml = st.open_orders.length
-    ? st.open_orders.map(o => {
-        const exp = o.date_expected
-          ? ` · expected ${new Date(o.date_expected + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-          : '';
-        return `<div class="entry-item" style="flex-direction:column;align-items:flex-start;gap:4px;">
+    ? st.open_orders.map(o => `
+        <div class="entry-item" style="flex-direction:column;align-items:flex-start;gap:4px;">
           <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
-            <span style="font-weight:600;">Ordered ${new Date(o.date_ordered + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}${exp} — ${o.qty} syringe${o.qty > 1 ? 's' : ''}</span>
+            <span style="font-weight:600;">Ordered ${_fmt(o.date_ordered)}${o.date_expected ? ' · expected ' + _fmt(o.date_expected) : ''} — ${o.qty} syringe${o.qty > 1 ? 's' : ''}</span>
             <button class="small blue" onclick="markMedArrived('${o.order_id}', ${o.qty})" style="font-size:12px;padding:4px 10px;">Arrived</button>
           </div>
           ${o.notes ? `<div class="entry-sub">${o.notes}</div>` : ''}
-        </div>`;
-      }).join('')
+        </div>`).join('')
     : '<div class="entry-sub" style="padding:8px 0;">No open orders</div>';
+
+  // Syringe table
+  const syrTableHtml = st.syringes && st.syringes.length
+    ? `<div style="margin-top:14px;">
+        <div style="font-size:12px;font-weight:700;color:#6e6e73;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px;">All Syringes</div>
+        <table style="width:100%;font-size:13px;border-collapse:collapse;">
+          <thead><tr style="color:#6e6e73;">
+            <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #e5e5ea;">#</th>
+            <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #e5e5ea;">Received</th>
+            <th style="text-align:center;padding:4px 6px;border-bottom:1px solid #e5e5ea;">Shots</th>
+            <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #e5e5ea;">Status</th>
+          </tr></thead>
+          <tbody>
+            ${st.syringes.slice().reverse().map(s => {
+              const isCurrent = s.syringe_id === st.current_syringe_id;
+              const status = s.date_depleted ? `Depleted ${_fmt(s.date_depleted)}`
+                           : isCurrent       ? '▶ Current'
+                           : 'Reserve';
+              const color  = s.date_depleted ? '#8e8e93'
+                           : isCurrent       ? '#007aff'
+                           : '#34c759';
+              return `<tr>
+                <td style="padding:6px;font-weight:600;">#${s.syringe_id}</td>
+                <td style="padding:6px;">${_fmt(s.date_received)}</td>
+                <td style="padding:6px;text-align:center;">${s.shots_used}/${st.shots_per_syringe}</td>
+                <td style="padding:6px;color:${color};font-weight:600;">${status}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>` : '';
+
   document.getElementById('med-status-card').innerHTML = `
     <div style="text-align:center;margin-bottom:16px;">
-      <div style="color:#6e6e73;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px;">Current Syringe</div>
-      <div style="display:flex;justify-content:center;gap:10px;margin-bottom:6px;">${pips}</div>
-      <div class="stat-big">${st.current_syringe}</div>
+      <div style="color:#6e6e73;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px;">
+        ${st.current_syringe_id ? `Syringe #${st.current_syringe_id}` : 'No active syringe'}
+      </div>
+      <div style="display:flex;justify-content:center;gap:10px;margin:8px 0 6px;">${pips}</div>
+      <div class="stat-big">${st.current_shots}</div>
       <div class="stat-sub">of ${st.shots_per_syringe} shots remaining</div>
     </div>
     <div style="display:flex;justify-content:space-around;padding:10px 0;border-top:1px solid #e5e5ea;border-bottom:1px solid #e5e5ea;margin-bottom:12px;">
       <div style="text-align:center;">
-        <div style="font-size:22px;font-weight:600;color:#1c1c1e;">${st.syringes_in_reserve}</div>
-        <div class="stat-sub">in reserve</div>
+        <div style="font-size:20px;font-weight:600;color:#1c1c1e;">${st.syringes_in_reserve}</div>
+        <div class="stat-sub">reserve</div>
+        <div style="font-size:11px;color:#8e8e93;">${reserveLabel}</div>
       </div>
       <div style="text-align:center;">
-        <div style="font-size:22px;font-weight:600;color:#1c1c1e;">${st.shots_remaining}</div>
-        <div class="stat-sub">total shots</div>
-      </div>
-      <div style="text-align:center;">
-        <div style="font-size:22px;font-weight:600;color:#1c1c1e;">${lastShot}</div>
+        <div style="font-size:20px;font-weight:600;color:#1c1c1e;">${_fmt(st.last_shot_date)}</div>
         <div class="stat-sub">last injection</div>
       </div>
     </div>
     <div style="font-size:12px;font-weight:700;color:#6e6e73;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;">Open Orders</div>
-    ${openHtml}`;
+    ${openHtml}
+    ${syrTableHtml}`;
 }
 
 function renderMedLog(entries) {
   const el = document.getElementById('med-log-list');
   if (!entries || !entries.length) { el.innerHTML = '<div class="empty">No events yet</div>'; return; }
-  const labels = { shot: '💉 Injection', received: '📦 Received', ordered: '🛒 Ordered' };
+  const labels = { shot: '💉 Injection', received: '📦 Received' };
   el.innerHTML = entries.map(e => {
-    const d = new Date(e.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    const detail = e.type === 'received' ? ` — ${e.qty} syringe${e.qty > 1 ? 's' : ''}` : '';
+    const d = _fmt(e.date);
+    const sidLabel = e.syringe_id ? ` · Syringe #${e.syringe_id}` : '';
+    const detail = e.type === 'received' ? ` — ${e.qty} syringe${e.qty > 1 ? 's' : ''}${e.syringe_id ? ' (#' + e.syringe_id + ')' : ''}` : sidLabel;
     return `<li class="entry-item">
       <div>
         <div>${labels[e.type] || e.type}${detail}</div>
@@ -1529,12 +1580,15 @@ function renderMedLog(entries) {
 
 function medLogShot() {
   const date  = document.getElementById('med-shot-date').value;
+  const sel   = document.getElementById('med-shot-syringe');
+  const sid   = sel ? (parseInt(sel.value) || null) : null;
   const notes = document.getElementById('med-shot-notes').value.trim();
   if (!date) { toast('Pick a date'); return; }
+  if (!sid)  { toast('No syringe selected — receive syringes first'); return; }
   google.script.run
-    .withSuccessHandler(st => { renderMedStatus(st); toast('Injection logged'); document.getElementById('med-shot-notes').value = ''; loadMeds(); })
+    .withSuccessHandler(st => { _medStatus = st; renderMedStatus(st); toast('Injection logged'); document.getElementById('med-shot-notes').value = ''; loadMeds(); })
     .withFailureHandler(e => toast('Error: ' + e.message))
-    .logMedShot(date, notes);
+    .logMedShot(date, sid, notes);
 }
 
 function medLogReceived() {
@@ -1543,9 +1597,9 @@ function medLogReceived() {
   const notes = document.getElementById('med-rx-notes').value.trim();
   if (!date) { toast('Pick a date'); return; }
   google.script.run
-    .withSuccessHandler(st => { renderMedStatus(st); toast(`${qty} syringe${qty > 1 ? 's' : ''} logged`); document.getElementById('med-rx-notes').value = ''; loadMeds(); })
+    .withSuccessHandler(st => { _medStatus = st; renderMedStatus(st); toast(`${qty} syringe${qty > 1 ? 's' : ''} received`); document.getElementById('med-rx-notes').value = ''; loadMeds(); })
     .withFailureHandler(e => toast('Error: ' + e.message))
-    .logMedReceived(date, qty, notes);
+    .logMedReceived(date, qty, '', notes);
 }
 
 function toggleMedOrderForm() {
