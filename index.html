@@ -301,6 +301,7 @@
     <div class="tab active" onclick="showConfigTab('foods', this)">🍎 Foods</div>
     <div class="tab" onclick="showConfigTab('acts', this)">🏃 Activities</div>
     <div class="tab" onclick="showConfigTab('weight', this)">⚖️ Weight</div>
+    <div class="tab" onclick="showConfigTab('schema', this)">🗂 Schema</div>
   </div>
 
   <!-- Foods sub-pane -->
@@ -429,6 +430,17 @@
     </div>
   </div>
 
+  <!-- Schema sub-pane -->
+  <div id="cfg-schema" style="display:none;">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <label style="margin-bottom:0;">Sheet / Code Alignment</label>
+        <button class="small blue" onclick="runSchemaCheck()">Check Now</button>
+      </div>
+      <div class="empty" id="schema-result">Press "Check Now" to compare Sheet headers against the code's schema definitions.</div>
+    </div>
+  </div>
+
 </div>
 
 <!-- ══ MEDS ════════════════════════════════════════════════════════════════ -->
@@ -542,10 +554,47 @@ function showTab(name, el) {
 
 function showConfigTab(name, el) {
   document.querySelectorAll('#cfg-tabs .tab').forEach(t => t.classList.remove('active'));
-  ['foods', 'acts', 'weight'].forEach(n => {
+  ['foods', 'acts', 'weight', 'schema'].forEach(n => {
     document.getElementById('cfg-' + n).style.display = n === name ? 'block' : 'none';
   });
   el.classList.add('active');
+}
+
+function runSchemaCheck() {
+  document.getElementById('schema-result').textContent = 'Checking…';
+  google.script.run
+    .withSuccessHandler(renderSchemaResult)
+    .withFailureHandler(e => { document.getElementById('schema-result').textContent = 'Error: ' + e.message; })
+    .validateSheets();
+}
+
+function renderSchemaResult(results) {
+  const el = document.getElementById('schema-result');
+  if (!results || !results.length) { el.textContent = 'No results returned.'; return; }
+  el.innerHTML = results.map(r => {
+    if (!r.exists) return `<div style="margin-bottom:12px;"><b>${r.sheet}</b> <span style="color:#ff3b30;">⚠ Sheet not found</span></div>`;
+    const icon = r.ok ? '✅' : '❌';
+    const colRows = r.cols.map(c =>
+      `<tr>
+        <td style="padding:3px 6px;color:#6e6e73;">${c.col}</td>
+        <td style="padding:3px 6px;font-family:monospace;">${c.expected}</td>
+        <td style="padding:3px 6px;font-family:monospace;color:${c.ok ? '#34c759' : '#ff3b30'};">${c.actual || '(blank)'}</td>
+        <td style="padding:3px 6px;">${c.ok ? '✓' : '✗ mismatch'}</td>
+      </tr>`
+    ).join('');
+    return `<div style="margin-bottom:16px;">
+      <div style="font-weight:700;margin-bottom:6px;">${icon} ${r.sheet}</div>
+      <table style="width:100%;font-size:12px;border-collapse:collapse;">
+        <thead><tr style="color:#6e6e73;border-bottom:1px solid #e5e5ea;">
+          <th style="text-align:left;padding:3px 6px;">#</th>
+          <th style="text-align:left;padding:3px 6px;">Expected</th>
+          <th style="text-align:left;padding:3px 6px;">Actual</th>
+          <th style="text-align:left;padding:3px 6px;"></th>
+        </tr></thead>
+        <tbody>${colRows}</tbody>
+      </table>
+    </div>`;
+  }).join('');
 }
 
 function showHistTab(name, el) {

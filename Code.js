@@ -6,6 +6,38 @@ const FOOD_LOG_SHEET = 'FoodLog';
 const ACT_SHEET      = 'Activities';
 const ACT_LOG_SHEET  = 'ActivityLog';
 
+// ── Sheet schemas — single source of truth ────────────────────────────────────
+// Column order defined here drives: initFitness/initMeds header rows,
+// all read/write index lookups, and validateSheets() header checks.
+// To change a column: update the array here — indices shift everywhere.
+//
+// NOTE on Foods: the sheet columns are ['name','serving_size','serving_note',
+// 'calories_per_serving'] but getFoods() returns {serving_name, serving_size}
+// (JS property names that predate this schema). serving_name comes from col F.serving_size
+// and serving_size comes from col F.serving_note — legacy naming mismatch,
+// preserved intentionally. See comment above getFoods().
+const SCHEMA = {
+  weight:    ['date', 'weight_lbs', 'net_calories', 'delta_weight', 'interpolated', 'food_calories', 'cal_deficit'],
+  foods:     ['name', 'serving_size', 'serving_note', 'calories_per_serving'],
+  food_log:  ['timestamp', 'date', 'food_name', 'num_servings', 'calories_total', 'meal'],
+  act:       ['name', 'type', 'unit', 'goal', 'calories', 'cal_weight1', 'cal_per_unit1', 'cal_weight2', 'cal_per_unit2'],
+  act_log:   ['timestamp', 'date', 'activity_name', 'value', 'calories_burned'],
+  med_syr:   ['syringe_id', 'order_id', 'date_ordered', 'date_expected', 'date_received', 'date_depleted', 'notes'],
+  med_shots: ['timestamp', 'date', 'syringe_id', 'shot_num', 'notes']
+};
+
+function _mkCols(arr) {
+  return arr.reduce(function(o, k, i) { o[k] = i; return o; }, {});
+}
+
+const W  = _mkCols(SCHEMA.weight);    // W.date, W.weight_lbs, W.net_calories, …
+const F  = _mkCols(SCHEMA.foods);     // F.name, F.serving_size, …
+const FL = _mkCols(SCHEMA.food_log);  // FL.timestamp, FL.date, FL.food_name, …
+const A  = _mkCols(SCHEMA.act);       // A.name, A.type, A.calories, …
+const AL = _mkCols(SCHEMA.act_log);   // AL.timestamp, AL.date, AL.activity_name, …
+const MS = _mkCols(SCHEMA.med_syr);   // MS.syringe_id, MS.order_id, MS.date_received, …
+const MH = _mkCols(SCHEMA.med_shots); // MH.timestamp, MH.date, MH.syringe_id, …
+
 function doGet() {
   return HtmlService.createTemplateFromFile('index')
     .evaluate()
@@ -60,13 +92,11 @@ function initFitness() {
     return sh;
   }
 
-  ensure(WEIGHT_SHEET,   ['date', 'weight_lbs', 'net_calories', 'delta_weight', 'interpolated', 'food_calories', 'cal_deficit']);
-  // Header text only -- see the comment above getFoods() for why this list
-  // doesn't need to match that function's internal property names.
-  ensure(FOODS_SHEET,    ['name', 'serving_size', 'serving_note', 'calories_per_serving']);
-  ensure(FOOD_LOG_SHEET, ['timestamp', 'date', 'food_name', 'num_servings', 'calories_total', 'meal']);
-  ensure(ACT_SHEET,      ['name', 'type', 'unit', 'goal', 'calories', 'cal_weight1', 'cal_per_unit1', 'cal_weight2', 'cal_per_unit2']);
-  ensure(ACT_LOG_SHEET,  ['timestamp', 'date', 'activity_name', 'value', 'calories_burned']);
+  ensure(WEIGHT_SHEET,   SCHEMA.weight);
+  ensure(FOODS_SHEET,    SCHEMA.foods);
+  ensure(FOOD_LOG_SHEET, SCHEMA.food_log);
+  ensure(ACT_SHEET,      SCHEMA.act);
+  ensure(ACT_LOG_SHEET,  SCHEMA.act_log);
 
   return 'Fitness Tracker initialized. Spreadsheet: ' + ss.getUrl();
 }
@@ -88,36 +118,36 @@ function computeDailyStats() {
   const aSheet = ss.getSheetByName(ACT_LOG_SHEET);
 
   // Always write the canonical header row (handles prior 'timestamp' label and col count).
-  wSheet.getRange(1, 1, 1, 7).setValues([['date', 'weight_lbs', 'net_calories', 'delta_weight', 'interpolated', 'food_calories', 'cal_deficit']]);
+  wSheet.getRange(1, 1, 1, SCHEMA.weight.length).setValues([SCHEMA.weight]);
 
   const wLastRow = wSheet.getLastRow();
   if (wLastRow < 2) return [];
 
-  // Read all weight data rows (7 cols; C/D/F/G may be blank on first run).
-  const wCols = Math.max(wSheet.getLastColumn(), 7);
+  // Read all weight data rows (C/D/F/G may be blank on first run).
+  const wCols = Math.max(wSheet.getLastColumn(), SCHEMA.weight.length);
   const wRows = wSheet.getRange(2, 1, wLastRow - 1, wCols).getValues();
 
-  // Sum food calories per date from FoodLog (date = col B = index 1, calories_total = col E = index 4).
+  // Sum food calories per date from FoodLog.
   const foodTotals = {};
   if (fSheet && fSheet.getLastRow() > 1) {
-    fSheet.getRange(2, 1, fSheet.getLastRow() - 1, 5).getValues().forEach(r => {
-      const d = _dateStr(r[1]);
-      if (d) foodTotals[d] = (foodTotals[d] || 0) + (parseFloat(r[4]) || 0);
+    fSheet.getRange(2, 1, fSheet.getLastRow() - 1, SCHEMA.food_log.length).getValues().forEach(r => {
+      const d = _dateStr(r[FL.date]);
+      if (d) foodTotals[d] = (foodTotals[d] || 0) + (parseFloat(r[FL.calories_total]) || 0);
     });
   }
 
-  // Sum calories burned per date from ActivityLog (date = col B = index 1, calories_burned = col E = index 4).
+  // Sum calories burned per date from ActivityLog.
   const actTotals = {};
   if (aSheet && aSheet.getLastRow() > 1) {
-    aSheet.getRange(2, 1, aSheet.getLastRow() - 1, 5).getValues().forEach(r => {
-      const d = _dateStr(r[1]);
-      if (d) actTotals[d] = (actTotals[d] || 0) + (parseFloat(r[4]) || 0);
+    aSheet.getRange(2, 1, aSheet.getLastRow() - 1, SCHEMA.act_log.length).getValues().forEach(r => {
+      const d = _dateStr(r[AL.date]);
+      if (d) actTotals[d] = (actTotals[d] || 0) + (parseFloat(r[AL.calories_burned]) || 0);
     });
   }
 
   // Build a sorted list of rows that have valid weight entries.
   const valid = wRows
-    .map((r, i) => ({ i, date: _dateStr(r[0]), weight: parseFloat(r[1]) || 0 }))
+    .map((r, i) => ({ i, date: _dateStr(r[W.date]), weight: parseFloat(r[W.weight_lbs]) || 0 }))
     .filter(r => r.date && r.weight)
     .sort((a, b) => a.date.localeCompare(b.date));
 
@@ -140,15 +170,15 @@ function computeDailyStats() {
     computed[row.i] = { net, delta, food: food > 0 ? Math.round(food) : '', def };
   });
 
-  // Write cols C-G in one operation; col E (interpolated) is read from wRows to preserve it.
+  // Write computed cols in one operation; interpolated is read from wRows to preserve it.
   const writeAll = wRows.map((r, i) => [
     computed[i] ? computed[i].net   : '',
     computed[i] ? computed[i].delta : '',
-    r[4],
+    r[W.interpolated],
     computed[i] ? computed[i].food  : '',
     computed[i] ? computed[i].def   : ''
   ]);
-  wSheet.getRange(2, 3, writeAll.length, 5).setValues(writeAll);
+  wSheet.getRange(2, W.net_calories + 1, writeAll.length, SCHEMA.weight.length - W.net_calories).setValues(writeAll);
 
   // Return enriched list for immediate use by getHistoryPage.
   return valid.map(row => ({
@@ -174,7 +204,7 @@ function logWeight(weight, date) {
   const newWeight = parseFloat(weight);
   const sheet     = _sheet(WEIGHT_SHEET);
   const lastRow   = sheet.getLastRow();
-  const nCols     = Math.max(sheet.getLastColumn(), 7);
+  const nCols     = Math.max(sheet.getLastColumn(), SCHEMA.weight.length);
 
   // Read all existing data rows.
   const existing = lastRow > 1
@@ -184,8 +214,8 @@ function logWeight(weight, date) {
   // Build map: date -> { weight, interpolated }
   const rowMap = {};
   existing.forEach(r => {
-    const rd = _dateStr(r[0]);
-    if (rd && parseFloat(r[1])) rowMap[rd] = { weight: parseFloat(r[1]), interpolated: !!(r[4]) };
+    const rd = _dateStr(r[W.date]);
+    if (rd && parseFloat(r[W.weight_lbs])) rowMap[rd] = { weight: parseFloat(r[W.weight_lbs]), interpolated: !!(r[W.interpolated]) };
   });
 
   // Mark the logged date as a real (non-interpolated) entry.
@@ -236,7 +266,7 @@ function logWeight(weight, date) {
   ]);
 
   if (lastRow > 1) sheet.getRange(2, 1, lastRow - 1, nCols).clearContent();
-  if (writeRows.length > 0) sheet.getRange(2, 1, writeRows.length, 7).setValues(writeRows);
+  if (writeRows.length > 0) sheet.getRange(2, 1, writeRows.length, SCHEMA.weight.length).setValues(writeRows);
 
   return getDateWeight(d);
 }
@@ -244,8 +274,8 @@ function logWeight(weight, date) {
 function getDateWeight(date) {
   const d    = date || _today();
   const rows = _sheet(WEIGHT_SHEET).getDataRange().getValues().slice(1);
-  const row  = rows.find(r => _dateStr(r[0]) === d && r[1]);
-  return { weight: row ? Math.round(parseFloat(row[1]) * 10) / 10 : null };
+  const row  = rows.find(r => _dateStr(r[W.date]) === d && r[W.weight_lbs]);
+  return { weight: row ? Math.round(parseFloat(row[W.weight_lbs]) * 10) / 10 : null };
 }
 
 function getTodayWeight() { return getDateWeight(_today()); }
@@ -255,18 +285,18 @@ function getWeightHistory(days) {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
   const sh   = _sheet(WEIGHT_SHEET);
-  const nCol = Math.max(sh.getLastColumn(), 7);
+  const nCol = Math.max(sh.getLastColumn(), SCHEMA.weight.length);
   const rows = sh.getRange(1, 1, sh.getLastRow(), nCol).getValues().slice(1);
   return rows
-    .filter(r => r[1] && new Date(_dateStr(r[0]) + 'T12:00:00') >= cutoff)
+    .filter(r => r[W.weight_lbs] && new Date(_dateStr(r[W.date]) + 'T12:00:00') >= cutoff)
     .map(r => ({
-      date:          _dateStr(r[0]),
-      weight:        Math.round(parseFloat(r[1]) * 10) / 10,
-      net_calories:  (r[2] !== '' && r[2] !== null && r[2] !== undefined) ? (parseFloat(r[2]) || null) : null,
-      delta_weight:  (r[3] !== '' && r[3] !== null && r[3] !== undefined) ? parseFloat(r[3]) : null,
-      interpolated:  !!(r[4]),
-      food_calories: (r[5] !== '' && r[5] !== null && r[5] !== undefined) ? (parseFloat(r[5]) || null) : null,
-      cal_deficit:   (r[6] !== '' && r[6] !== null && r[6] !== undefined) ? parseFloat(r[6]) : null
+      date:          _dateStr(r[W.date]),
+      weight:        Math.round(parseFloat(r[W.weight_lbs]) * 10) / 10,
+      net_calories:  (r[W.net_calories]  !== '' && r[W.net_calories]  != null) ? (parseFloat(r[W.net_calories])  || null) : null,
+      delta_weight:  (r[W.delta_weight]  !== '' && r[W.delta_weight]  != null) ? parseFloat(r[W.delta_weight])          : null,
+      interpolated:  !!(r[W.interpolated]),
+      food_calories: (r[W.food_calories] !== '' && r[W.food_calories] != null) ? (parseFloat(r[W.food_calories]) || null) : null,
+      cal_deficit:   (r[W.cal_deficit]   !== '' && r[W.cal_deficit]   != null) ? parseFloat(r[W.cal_deficit])           : null
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -283,9 +313,11 @@ function getWeightHistory(days) {
 
 function getFoods() {
   const rows = _sheet(FOODS_SHEET).getDataRange().getValues().slice(1);
-  return rows.filter(r => r[0]).map(r => ({
-    name: r[0], serving_name: r[1], serving_size: r[2],
-    calories_per_serving: parseFloat(r[3]) || 0
+  // serving_name/serving_size are legacy JS names: serving_name → F.serving_size col,
+  // serving_size → F.serving_note col. See SCHEMA note at top.
+  return rows.filter(r => r[F.name]).map(r => ({
+    name: r[F.name], serving_name: r[F.serving_size], serving_size: r[F.serving_note],
+    calories_per_serving: parseFloat(r[F.calories_per_serving]) || 0
   }));
 }
 
@@ -293,15 +325,14 @@ function saveFood(data) {
   const sheet = _sheet(FOODS_SHEET);
   const rows  = sheet.getDataRange().getValues();
   const match = data._originalName || data.name;
+  const row   = [data.name, data.serving_name, data.serving_size, parseFloat(data.calories_per_serving)];
   for (let i = 1; i < rows.length; i++) {
-    if (rows[i][0] === match) {
-      sheet.getRange(i + 1, 1, 1, 4).setValues([[
-        data.name, data.serving_name, data.serving_size, parseFloat(data.calories_per_serving)
-      ]]);
+    if (rows[i][F.name] === match) {
+      sheet.getRange(i + 1, 1, 1, SCHEMA.foods.length).setValues([row]);
       return getFoods();
     }
   }
-  sheet.appendRow([data.name, data.serving_name, data.serving_size, parseFloat(data.calories_per_serving)]);
+  sheet.appendRow(row);
   return getFoods();
 }
 
@@ -309,7 +340,7 @@ function deleteFood(name) {
   const sheet = _sheet(FOODS_SHEET);
   const rows  = sheet.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
-    if (rows[i][0] === name) { sheet.deleteRow(i + 1); break; }
+    if (rows[i][F.name] === name) { sheet.deleteRow(i + 1); break; }
   }
   return getFoods();
 }
@@ -326,7 +357,7 @@ function deleteFoodEntry(timestamp, date) {
   const sheet = _sheet(FOOD_LOG_SHEET);
   const rows  = sheet.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
-    if (_tsStr(rows[i][0]) === String(timestamp)) { sheet.deleteRow(i + 1); break; }
+    if (_tsStr(rows[i][FL.timestamp]) === String(timestamp)) { sheet.deleteRow(i + 1); break; }
   }
   return getDateFood(date || _today());
 }
@@ -334,8 +365,9 @@ function deleteFoodEntry(timestamp, date) {
 function getDateFood(date) {
   const d       = date || _today();
   const rows    = _sheet(FOOD_LOG_SHEET).getDataRange().getValues().slice(1);
-  const entries = rows.filter(r => _dateStr(r[1]) === d && r[2]).map(r => ({
-    timestamp: _tsStr(r[0]), food_name: r[2], num_servings: parseFloat(r[3]), calories: parseFloat(r[4]), meal: r[5] || ''
+  const entries = rows.filter(r => _dateStr(r[FL.date]) === d && r[FL.food_name]).map(r => ({
+    timestamp: _tsStr(r[FL.timestamp]), food_name: r[FL.food_name],
+    num_servings: parseFloat(r[FL.num_servings]), calories: parseFloat(r[FL.calories_total]), meal: r[FL.meal] || ''
   }));
   return { entries, total_calories: Math.round(entries.reduce((s, e) => s + (e.calories || 0), 0)) };
 }
@@ -348,11 +380,11 @@ function getFoodLog(days) {
   cutoff.setDate(cutoff.getDate() - days);
   const rows   = _sheet(FOOD_LOG_SHEET).getDataRange().getValues().slice(1);
   const result = {};
-  rows.filter(r => r[1] && new Date(_dateStr(r[1]) + 'T12:00:00') >= cutoff).forEach(r => {
-    const d = _dateStr(r[1]);
+  rows.filter(r => r[FL.date] && new Date(_dateStr(r[FL.date]) + 'T12:00:00') >= cutoff).forEach(r => {
+    const d = _dateStr(r[FL.date]);
     if (!result[d]) result[d] = { entries: [], total_calories: 0 };
-    result[d].entries.push({ timestamp: _tsStr(r[0]), food_name: r[2], num_servings: parseFloat(r[3]), calories: parseFloat(r[4]), meal: r[5] || '' });
-    result[d].total_calories += parseFloat(r[4]) || 0;
+    result[d].entries.push({ timestamp: _tsStr(r[FL.timestamp]), food_name: r[FL.food_name], num_servings: parseFloat(r[FL.num_servings]), calories: parseFloat(r[FL.calories_total]), meal: r[FL.meal] || '' });
+    result[d].total_calories += parseFloat(r[FL.calories_total]) || 0;
   });
   Object.values(result).forEach(day => { day.total_calories = Math.round(day.total_calories); });
   return result;
@@ -362,13 +394,13 @@ function getFoodLog(days) {
 
 function getActivities() {
   const rows = _sheet(ACT_SHEET).getDataRange().getValues().slice(1);
-  return rows.filter(r => r[0]).map(r => ({
-    name: r[0], type: r[1] || 'checkbox', unit: r[2] || '', goal: r[3] || '',
-    calories:      parseFloat(r[4]) || 0,
-    cal_weight1:   parseFloat(r[5]) || 0,
-    cal_per_unit1: parseFloat(r[6]) || 0,
-    cal_weight2:   parseFloat(r[7]) || 0,
-    cal_per_unit2: parseFloat(r[8]) || 0
+  return rows.filter(r => r[A.name]).map(r => ({
+    name: r[A.name], type: r[A.type] || 'checkbox', unit: r[A.unit] || '', goal: r[A.goal] || '',
+    calories:      parseFloat(r[A.calories])      || 0,
+    cal_weight1:   parseFloat(r[A.cal_weight1])   || 0,
+    cal_per_unit1: parseFloat(r[A.cal_per_unit1]) || 0,
+    cal_weight2:   parseFloat(r[A.cal_weight2])   || 0,
+    cal_per_unit2: parseFloat(r[A.cal_per_unit2]) || 0
   }));
 }
 
@@ -385,8 +417,8 @@ function saveActivity(data) {
     parseFloat(data.cal_per_unit2) || 0
   ];
   for (let i = 1; i < rows.length; i++) {
-    if (rows[i][0] === match) {
-      sheet.getRange(i + 1, 1, 1, 9).setValues([row]);
+    if (rows[i][A.name] === match) {
+      sheet.getRange(i + 1, 1, 1, SCHEMA.act.length).setValues([row]);
       return getActivities();
     }
   }
@@ -398,7 +430,7 @@ function deleteActivity(name) {
   const sheet = _sheet(ACT_SHEET);
   const rows  = sheet.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
-    if (rows[i][0] === name) { sheet.deleteRow(i + 1); break; }
+    if (rows[i][A.name] === name) { sheet.deleteRow(i + 1); break; }
   }
   return getActivities();
 }
@@ -416,7 +448,7 @@ function deleteActivityEntry(timestamp, date) {
   const sheet = _sheet(ACT_LOG_SHEET);
   const rows  = sheet.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
-    if (_tsStr(rows[i][0]) === String(timestamp)) { sheet.deleteRow(i + 1); break; }
+    if (_tsStr(rows[i][AL.timestamp]) === String(timestamp)) { sheet.deleteRow(i + 1); break; }
   }
   return getDateActivities(date || _today());
 }
@@ -426,14 +458,14 @@ function getDateActivities(date) {
   const rows = _sheet(ACT_LOG_SHEET).getDataRange().getValues().slice(1);
   return rows
     .filter(r => {
-      const ts = _tsStr(r[0]);
-      return ts.length > 10 && _dateStr(r[1]) === d && r[2];
+      const ts = _tsStr(r[AL.timestamp]);
+      return ts.length > 10 && _dateStr(r[AL.date]) === d && r[AL.activity_name];
     })
     .map(r => ({
-      timestamp:       _tsStr(r[0]),
-      activity_name:   String(r[2]),
-      value:           r[3],
-      calories_burned: parseFloat(r[4]) || 0
+      timestamp:       _tsStr(r[AL.timestamp]),
+      activity_name:   String(r[AL.activity_name]),
+      value:           r[AL.value],
+      calories_burned: parseFloat(r[AL.calories_burned]) || 0
     }));
 }
 
@@ -447,17 +479,17 @@ function getActivityLog(days) {
   const result = {};
   rows
     .filter(r => {
-      const ts = _tsStr(r[0]);
-      return ts.length > 10 && r[1] && new Date(_dateStr(r[1]) + 'T12:00:00') >= cutoff;
+      const ts = _tsStr(r[AL.timestamp]);
+      return ts.length > 10 && r[AL.date] && new Date(_dateStr(r[AL.date]) + 'T12:00:00') >= cutoff;
     })
     .forEach(r => {
-      const d = _dateStr(r[1]);
+      const d = _dateStr(r[AL.date]);
       if (!result[d]) result[d] = [];
       result[d].push({
-        timestamp:       _tsStr(r[0]),
-        activity_name:   String(r[2]),
-        value:           r[3],
-        calories_burned: parseFloat(r[4]) || 0
+        timestamp:       _tsStr(r[AL.timestamp]),
+        activity_name:   String(r[AL.activity_name]),
+        value:           r[AL.value],
+        calories_burned: parseFloat(r[AL.calories_burned]) || 0
       });
     });
   return result;
@@ -554,14 +586,16 @@ function auditAndFixSheets() {
   //    Foods sheet's header row actually says). Update this list by hand
   //    whenever you deliberately change a header label; don't assume it can
   //    be derived from the code that reads the column.
+  // expected{} is now derived from SCHEMA — the single source of truth.
+  // Adding a sheet to SCHEMA automatically includes it here.
   const expected = {};
-  // Weight's 5 extra columns are computed and written by computeDailyStats() --
-  // not "extra/beyond schema," they're real, code-managed columns.
-  expected[WEIGHT_SHEET]   = ['date', 'weight_lbs', 'net_calories', 'delta_weight', 'interpolated', 'food_calories', 'cal_deficit'];
-  expected[FOODS_SHEET]    = ['name', 'serving_size', 'serving_note', 'calories_per_serving'];
-  expected[FOOD_LOG_SHEET] = ['timestamp', 'date', 'food_name', 'num_servings', 'calories_total', 'meal'];
-  expected[ACT_SHEET]      = ['name', 'type', 'unit', 'goal', 'calories', 'cal_weight1', 'cal_per_unit1', 'cal_weight2', 'cal_per_unit2'];
-  expected[ACT_LOG_SHEET]  = ['timestamp', 'date', 'activity_name', 'value', 'calories_burned'];
+  expected[WEIGHT_SHEET]    = SCHEMA.weight;
+  expected[FOODS_SHEET]     = SCHEMA.foods;
+  expected[FOOD_LOG_SHEET]  = SCHEMA.food_log;
+  expected[ACT_SHEET]       = SCHEMA.act;
+  expected[ACT_LOG_SHEET]   = SCHEMA.act_log;
+  expected[MED_SYR_SHEET]   = SCHEMA.med_syr;
+  expected[MED_SHOTS_SHEET] = SCHEMA.med_shots;
 
   // Type of value the code actually expects at each position, in the same
   // order as `expected` above -- this is what app correctness depends on,
@@ -577,6 +611,9 @@ function auditAndFixSheets() {
   // used by activities with the alternate weight-based calorie formula.
   colTypes[ACT_SHEET]      = ['text_required', 'text', 'text', 'text', 'number', 'number_optional', 'number_optional', 'number_optional', 'number_optional'];
   colTypes[ACT_LOG_SHEET]  = ['datetime', 'date', 'text_required', 'any', 'number'];
+  // date_ordered required; date_expected/date_received/date_depleted optional (lifecycle phases).
+  colTypes[MED_SYR_SHEET]   = ['number', 'text_required', 'date', 'date', 'date', 'date', 'text'];
+  colTypes[MED_SHOTS_SHEET] = ['datetime', 'date', 'number', 'number', 'text'];
 
   function isOk(val, type) {
     if (type === 'any') return true;
@@ -1036,8 +1073,8 @@ function initMeds() {
     if (sh.getLastRow() === 0) sh.appendRow(headers);
     return sh;
   }
-  ensure(MED_SYR_SHEET,   ['syringe_id', 'order_id', 'date_ordered', 'date_expected', 'date_received', 'date_depleted', 'notes']);
-  ensure(MED_SHOTS_SHEET, ['timestamp', 'date', 'syringe_id', 'shot_num', 'notes']);
+  ensure(MED_SYR_SHEET,   SCHEMA.med_syr);
+  ensure(MED_SHOTS_SHEET, SCHEMA.med_shots);
   return 'Med sheets ready (MedSyringes, MedShots).';
 }
 
@@ -1056,29 +1093,27 @@ function _shotsBySyringe() {
   const sh = _sheet(MED_SHOTS_SHEET);
   if (!sh || sh.getLastRow() < 2) return {};
   const counts = {};
-  sh.getDataRange().getValues().slice(1).filter(r => r[0]).forEach(r => {
-    const sid = String(parseInt(r[2]) || '');
+  sh.getDataRange().getValues().slice(1).filter(r => r[MH.timestamp]).forEach(r => {
+    const sid = String(parseInt(r[MH.syringe_id]) || '');
     if (sid) counts[sid] = (counts[sid] || 0) + 1;
   });
   return counts;
 }
 
 function _readSyringes(shotCounts) {
-  // MedSyringes cols: [0]syringe_id [1]order_id [2]date_ordered [3]date_expected
-  //                   [4]date_received [5]date_depleted [6]notes
   const sh = _sheet(MED_SYR_SHEET);
   if (!sh || sh.getLastRow() < 2) return [];
   return sh.getDataRange().getValues().slice(1)
-    .filter(r => r[0])
+    .filter(r => r[MS.syringe_id])
     .map(r => ({
-      syringe_id:    parseInt(r[0]),
-      order_id:      String(r[1] || ''),
-      date_ordered:  _dateStr(r[2]),
-      date_expected: _dateStr(r[3]),
-      date_received: _dateStr(r[4]),
-      date_depleted: _dateStr(r[5]),
-      notes:         String(r[6] || ''),
-      shots_used:    (shotCounts || {})[String(parseInt(r[0]))] || 0
+      syringe_id:    parseInt(r[MS.syringe_id]),
+      order_id:      String(r[MS.order_id]      || ''),
+      date_ordered:  _dateStr(r[MS.date_ordered]),
+      date_expected: _dateStr(r[MS.date_expected]),
+      date_received: _dateStr(r[MS.date_received]),
+      date_depleted: _dateStr(r[MS.date_depleted]),
+      notes:         String(r[MS.notes]          || ''),
+      shots_used:    (shotCounts || {})[String(parseInt(r[MS.syringe_id]))] || 0
     }))
     .sort((a, b) => a.syringe_id - b.syringe_id);
 }
@@ -1111,8 +1146,8 @@ function getMedStatus() {
 
   // Last injection date from MedShots
   const lastShotDate = shotsSheet.getDataRange().getValues().slice(1)
-    .filter(r => r[0])
-    .reduce((max, r) => { const d = _dateStr(r[1]); return d > max ? d : max; }, '');
+    .filter(r => r[MH.timestamp])
+    .reduce((max, r) => { const d = _dateStr(r[MH.date]); return d > max ? d : max; }, '');
 
   // Group on-order syringes by order_id for the UI
   const orderGroups = {};
@@ -1154,8 +1189,8 @@ function logMedShot(date, syringeId, notes) {
     const syrSheet = _sheet(MED_SYR_SHEET);
     const rows = syrSheet.getDataRange().getValues();
     for (let i = 1; i < rows.length; i++) {
-      if (parseInt(rows[i][0]) === sid && !rows[i][5]) {
-        syrSheet.getRange(i + 1, 6).setValue(d);
+      if (parseInt(rows[i][MS.syringe_id]) === sid && !rows[i][MS.date_depleted]) {
+        syrSheet.getRange(i + 1, MS.date_depleted + 1).setValue(d);
         break;
       }
     }
@@ -1179,13 +1214,13 @@ function placeMedOrder(dateOrdered, dateExpected, qty, notes) {
 
 // Mark one or more syringes as received (sets date_received).
 function receiveMedSyringes(syringeIds, dateReceived) {
-  const arrived   = dateReceived || _today();
-  const syrSheet  = _sheet(MED_SYR_SHEET);
-  const rows      = syrSheet.getDataRange().getValues();
-  const idSet     = new Set(syringeIds.map(id => parseInt(id)));
+  const arrived  = dateReceived || _today();
+  const syrSheet = _sheet(MED_SYR_SHEET);
+  const rows     = syrSheet.getDataRange().getValues();
+  const idSet    = new Set(syringeIds.map(id => parseInt(id)));
   for (let i = 1; i < rows.length; i++) {
-    if (idSet.has(parseInt(rows[i][0])) && !rows[i][4]) {
-      syrSheet.getRange(i + 1, 5).setValue(arrived);
+    if (idSet.has(parseInt(rows[i][MS.syringe_id])) && !rows[i][MS.date_received]) {
+      syrSheet.getRange(i + 1, MS.date_received + 1).setValue(arrived);
     }
   }
   return getMedStatus();
@@ -1197,8 +1232,8 @@ function receiveMedOrder(orderId, dateReceived) {
   const syrSheet = _sheet(MED_SYR_SHEET);
   const rows     = syrSheet.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
-    if (String(rows[i][1]) === String(orderId) && !rows[i][4]) {
-      syrSheet.getRange(i + 1, 5).setValue(arrived);
+    if (String(rows[i][MS.order_id]) === String(orderId) && !rows[i][MS.date_received]) {
+      syrSheet.getRange(i + 1, MS.date_received + 1).setValue(arrived);
     }
   }
   return getMedStatus();
@@ -1214,35 +1249,67 @@ function getMedHistory(days) {
   cutoff.setDate(cutoff.getDate() - days);
 
   const shots = shotsSheet.getDataRange().getValues().slice(1)
-    .filter(r => r[0] && new Date(_dateStr(r[1]) + 'T12:00:00') >= cutoff)
+    .filter(r => r[MH.timestamp] && new Date(_dateStr(r[MH.date]) + 'T12:00:00') >= cutoff)
     .map(r => ({
-      timestamp:  _tsStr(r[0]),
-      date:       _dateStr(r[1]),
-      syringe_id: parseInt(r[2]),
-      shot_num:   parseInt(r[3]),
-      notes:      String(r[4] || ''),
+      timestamp:  _tsStr(r[MH.timestamp]),
+      date:       _dateStr(r[MH.date]),
+      syringe_id: parseInt(r[MH.syringe_id]),
+      shot_num:   parseInt(r[MH.shot_num]),
+      notes:      String(r[MH.notes] || ''),
       event:      'shot'
     }));
 
   const receives = syrSheet.getDataRange().getValues().slice(1)
-    .filter(r => r[0] && r[4] && new Date(_dateStr(r[4]) + 'T12:00:00') >= cutoff)
+    .filter(r => r[MS.syringe_id] && r[MS.date_received] && new Date(_dateStr(r[MS.date_received]) + 'T12:00:00') >= cutoff)
     .map(r => ({
-      date:       _dateStr(r[4]),
-      syringe_id: parseInt(r[0]),
-      order_id:   String(r[1] || ''),
+      date:       _dateStr(r[MS.date_received]),
+      syringe_id: parseInt(r[MS.syringe_id]),
+      order_id:   String(r[MS.order_id] || ''),
       event:      'received'
     }));
 
   const orders = syrSheet.getDataRange().getValues().slice(1)
-    .filter(r => r[0] && r[2] && new Date(_dateStr(r[2]) + 'T12:00:00') >= cutoff)
+    .filter(r => r[MS.syringe_id] && r[MS.date_ordered] && new Date(_dateStr(r[MS.date_ordered]) + 'T12:00:00') >= cutoff)
     .reduce((acc, r) => {
-      const oid = String(r[1] || r[2]);
-      if (!acc[oid]) acc[oid] = { date: _dateStr(r[2]), order_id: oid, syringe_ids: [], event: 'ordered' };
-      acc[oid].syringe_ids.push(parseInt(r[0]));
+      const oid = String(r[MS.order_id] || r[MS.date_ordered]);
+      if (!acc[oid]) acc[oid] = { date: _dateStr(r[MS.date_ordered]), order_id: oid, syringe_ids: [], event: 'ordered' };
+      acc[oid].syringe_ids.push(parseInt(r[MS.syringe_id]));
       return acc;
     }, {});
 
   return [...shots, ...receives, ...Object.values(orders)]
     .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
     .slice(0, 60);
+}
+
+// ── Schema validation — on-demand only (reads Sheet header rows via Sheets API)
+//
+// Compares actual Sheet header rows against the canonical SCHEMA definitions.
+// Returns one entry per sheet: ok (bool), and per-column match status.
+// Called by the Schema tab in Configure — never runs automatically.
+function validateSheets() {
+  const ss = _ss();
+  const targets = [
+    [WEIGHT_SHEET,    SCHEMA.weight],
+    [FOODS_SHEET,     SCHEMA.foods],
+    [FOOD_LOG_SHEET,  SCHEMA.food_log],
+    [ACT_SHEET,       SCHEMA.act],
+    [ACT_LOG_SHEET,   SCHEMA.act_log],
+    [MED_SYR_SHEET,   SCHEMA.med_syr],
+    [MED_SHOTS_SHEET, SCHEMA.med_shots]
+  ];
+  return targets.map(function(pair) {
+    var name   = pair[0];
+    var schema = pair[1];
+    var sh     = ss.getSheetByName(name);
+    if (!sh) return { sheet: name, exists: false, ok: false, cols: [] };
+    var ncols  = Math.max(sh.getLastColumn(), schema.length);
+    var actual = sh.getLastRow() > 0
+      ? sh.getRange(1, 1, 1, ncols).getValues()[0]
+      : [];
+    var cols = schema.map(function(exp, i) {
+      return { col: i + 1, expected: exp, actual: actual[i] || '', ok: (actual[i] || '') === exp };
+    });
+    return { sheet: name, exists: true, ok: cols.every(function(c) { return c.ok; }), cols: cols };
+  });
 }
