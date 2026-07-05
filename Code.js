@@ -128,16 +128,16 @@ function applySheetFormatting(sh, schemaKey) {
   try { var f = sh.getFilter(); if (f) f.remove(); } catch (e) {}
   sh.getRange(1, 1, lastRow, lastCol).createFilter();
 
-  if (lastRow > 1) {
-    schema.forEach(function(col, i) {
-      var type = types[col];
-      if (type === 'date') {
-        sh.getRange(2, i + 1, lastRow - 1, 1).setNumberFormat(DATE_FORMAT);
-      } else if (type === 'datetime') {
-        sh.getRange(2, i + 1, lastRow - 1, 1).setNumberFormat(DATETIME_FORMAT);
-      }
-    });
-  }
+  // Format the full column so future rows inherit the format automatically.
+  var maxRow = sh.getMaxRows();
+  schema.forEach(function(col, i) {
+    var type = types[col];
+    if (type === 'date') {
+      sh.getRange(2, i + 1, maxRow - 1, 1).setNumberFormat(DATE_FORMAT);
+    } else if (type === 'datetime') {
+      sh.getRange(2, i + 1, maxRow - 1, 1).setNumberFormat(DATETIME_FORMAT);
+    }
+  });
 }
 
 // Run from the Apps Script editor to apply bold headers, frozen rows, filters,
@@ -1370,7 +1370,7 @@ function validateSheets() {
       var t = types[col];
       if (t !== 'date' && t !== 'datetime') return;
       var expected = t === 'date' ? DATE_FORMAT : DATETIME_FORMAT;
-      var actual_fmt = lastRow > 1 ? sh.getRange(2, i + 1).getNumberFormat() : '';
+      var actual_fmt = sh.getRange(2, i + 1).getNumberFormat(); // row 2 always has format since applySheetFormatting uses getMaxRows()
       dateCols.push({ col: col, expected: expected, actual: actual_fmt, ok: actual_fmt === expected });
     });
 
