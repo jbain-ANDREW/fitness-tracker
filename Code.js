@@ -26,6 +26,22 @@ const SCHEMA = {
   med_shots: ['timestamp', 'date', 'syringe_id', 'shot_num', 'notes']
 };
 
+// Column data types — used by auditAndFixSheets() and applySheetFormatting().
+// 'date'/'datetime' columns get date-number-format applied automatically.
+const SCHEMA_TYPES = {
+  weight:    { date: 'date', weight_lbs: 'number', net_calories: 'number_optional', delta_weight: 'number_optional', interpolated: 'number_optional', food_calories: 'number_optional', cal_deficit: 'number_optional' },
+  foods:     { name: 'text_required', serving_size: 'text', serving_note: 'text', calories_per_serving: 'number' },
+  food_log:  { timestamp: 'datetime', date: 'date', food_name: 'text_required', num_servings: 'number', calories_total: 'number', meal: 'text' },
+  act:       { name: 'text_required', type: 'text', unit: 'text', goal: 'text', calories: 'number', cal_weight1: 'number_optional', cal_per_unit1: 'number_optional', cal_weight2: 'number_optional', cal_per_unit2: 'number_optional' },
+  act_log:   { timestamp: 'datetime', date: 'date', activity_name: 'text_required', value: 'any', calories_burned: 'number' },
+  med_syr:   { syringe_id: 'number', order_id: 'text_required', date_ordered: 'date', date_expected: 'date', date_received: 'date', date_depleted: 'date', notes: 'text' },
+  med_shots: { timestamp: 'datetime', date: 'date', syringe_id: 'number', shot_num: 'number', notes: 'text' }
+};
+
+// Date display formats — applied to 'date' and 'datetime' columns in all sheets.
+const DATE_FORMAT     = 'ddd, MM/dd/yyyy';
+const DATETIME_FORMAT = 'ddd, MM/dd/yyyy HH:mm';
+
 function _mkCols(arr) {
   return arr.reduce(function(o, k, i) { o[k] = i; return o; }, {});
 }
@@ -37,6 +53,18 @@ const A  = _mkCols(SCHEMA.act);       // A.name, A.type, A.calories, …
 const AL = _mkCols(SCHEMA.act_log);   // AL.timestamp, AL.date, AL.activity_name, …
 const MS = _mkCols(SCHEMA.med_syr);   // MS.syringe_id, MS.order_id, MS.date_received, …
 const MH = _mkCols(SCHEMA.med_shots); // MH.timestamp, MH.date, MH.syringe_id, …
+
+// SCHEMA_MAP ties sheet constants to their schema/types for iteration.
+// Used by validateSheets(), formatAllSheets(), and auditAndFixSheets().
+const SCHEMA_MAP = [
+  { name: WEIGHT_SHEET,    key: 'weight'    },
+  { name: FOODS_SHEET,     key: 'foods'     },
+  { name: FOOD_LOG_SHEET,  key: 'food_log'  },
+  { name: ACT_SHEET,       key: 'act'       },
+  { name: ACT_LOG_SHEET,   key: 'act_log'   },
+  { name: MED_SYR_SHEET,   key: 'med_syr'   },
+  { name: MED_SHOTS_SHEET, key: 'med_shots' }
+];
 
 function doGet() {
   return HtmlService.createTemplateFromFile('index')
@@ -78,6 +106,51 @@ function _tsStr(val) {
   return String(val);
 }
 
+// ── Sheet formatting ──────────────────────────────────────────────────────────
+
+// Applies standard formatting to a single sheet:
+//   - Row 1 bold, frozen, filter on all columns
+//   - Date/datetime columns formatted as DATE_FORMAT / DATETIME_FORMAT
+// Safe to call on any sheet at any time (idempotent).
+function applySheetFormatting(sh, schemaKey) {
+  var schema = SCHEMA[schemaKey];
+  var types  = SCHEMA_TYPES[schemaKey];
+  if (!schema || !types) return;
+  var lastCol = schema.length;
+  var lastRow = Math.max(sh.getLastRow(), 2);
+
+  sh.getRange(1, 1, 1, lastCol).setFontWeight('bold');
+  sh.setFrozenRows(1);
+
+  try { var f = sh.getFilter(); if (f) f.remove(); } catch (e) {}
+  sh.getRange(1, 1, lastRow, lastCol).createFilter();
+
+  if (lastRow > 1) {
+    schema.forEach(function(col, i) {
+      var type = types[col];
+      if (type === 'date') {
+        sh.getRange(2, i + 1, lastRow - 1, 1).setNumberFormat(DATE_FORMAT);
+      } else if (type === 'datetime') {
+        sh.getRange(2, i + 1, lastRow - 1, 1).setNumberFormat(DATETIME_FORMAT);
+      }
+    });
+  }
+}
+
+// Run from the Apps Script editor to apply bold headers, frozen rows, filters,
+// and date column formatting to every sheet at once. Safe to re-run.
+function formatAllSheets() {
+  var ss = _ss();
+  var results = [];
+  SCHEMA_MAP.forEach(function(entry) {
+    var sh = ss.getSheetByName(entry.name);
+    if (!sh) { results.push(entry.name + ': not found, skipped'); return; }
+    applySheetFormatting(sh, entry.key);
+    results.push(entry.name + ': formatted');
+  });
+  return results.join('\n');
+}
+
 // ── One-time init ─────────────────────────────────────────────────────────────
 
 function initFitness() {
@@ -85,18 +158,19 @@ function initFitness() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   PropertiesService.getScriptProperties().setProperty('SPREADSHEET_ID', SPREADSHEET_ID);
 
-  function ensure(name, headers) {
+  function ensure(name, schemaKey) {
     let sh = ss.getSheetByName(name);
     if (!sh) sh = ss.insertSheet(name);
-    if (sh.getLastRow() === 0) sh.appendRow(headers);
+    if (sh.getLastRow() === 0) sh.appendRow(SCHEMA[schemaKey]);
+    applySheetFormatting(sh, schemaKey);
     return sh;
   }
 
-  ensure(WEIGHT_SHEET,   SCHEMA.weight);
-  ensure(FOODS_SHEET,    SCHEMA.foods);
-  ensure(FOOD_LOG_SHEET, SCHEMA.food_log);
-  ensure(ACT_SHEET,      SCHEMA.act);
-  ensure(ACT_LOG_SHEET,  SCHEMA.act_log);
+  ensure(WEIGHT_SHEET,   'weight');
+  ensure(FOODS_SHEET,    'foods');
+  ensure(FOOD_LOG_SHEET, 'food_log');
+  ensure(ACT_SHEET,      'act');
+  ensure(ACT_LOG_SHEET,  'act_log');
 
   return 'Fitness Tracker initialized. Spreadsheet: ' + ss.getUrl();
 }
@@ -586,34 +660,15 @@ function auditAndFixSheets() {
   //    Foods sheet's header row actually says). Update this list by hand
   //    whenever you deliberately change a header label; don't assume it can
   //    be derived from the code that reads the column.
-  // expected{} is now derived from SCHEMA — the single source of truth.
-  // Adding a sheet to SCHEMA automatically includes it here.
-  const expected = {};
-  expected[WEIGHT_SHEET]    = SCHEMA.weight;
-  expected[FOODS_SHEET]     = SCHEMA.foods;
-  expected[FOOD_LOG_SHEET]  = SCHEMA.food_log;
-  expected[ACT_SHEET]       = SCHEMA.act;
-  expected[ACT_LOG_SHEET]   = SCHEMA.act_log;
-  expected[MED_SYR_SHEET]   = SCHEMA.med_syr;
-  expected[MED_SHOTS_SHEET] = SCHEMA.med_shots;
+  // expected{} and colTypes{} are derived from SCHEMA_MAP — the single source of truth.
+  const expected  = {};
+  const colTypes  = {};
+  SCHEMA_MAP.forEach(function(e) {
+    expected[e.name] = SCHEMA[e.key];
+    colTypes[e.name] = SCHEMA[e.key].map(function(col) { return SCHEMA_TYPES[e.key][col] || 'any'; });
+  });
 
-  // Type of value the code actually expects at each position, in the same
-  // order as `expected` above -- this is what app correctness depends on,
-  // independent of whatever the header row says.
-  const colTypes = {};
-  // net_calories/delta_weight/interpolated/food_calories/cal_deficit are all
-  // legitimately blank sometimes (no food logged that day, first-ever entry,
-  // not a gap-filled day, etc.) -- optional, not required.
-  colTypes[WEIGHT_SHEET]   = ['date', 'number', 'number_optional', 'number_optional', 'number_optional', 'number_optional', 'number_optional'];
-  colTypes[FOODS_SHEET]    = ['text_required', 'text', 'text', 'number'];
-  colTypes[FOOD_LOG_SHEET] = ['datetime', 'date', 'text_required', 'number', 'number', 'text'];
-  // cal_weight1/cal_per_unit1/cal_weight2/cal_per_unit2 are optional -- only
-  // used by activities with the alternate weight-based calorie formula.
-  colTypes[ACT_SHEET]      = ['text_required', 'text', 'text', 'text', 'number', 'number_optional', 'number_optional', 'number_optional', 'number_optional'];
-  colTypes[ACT_LOG_SHEET]  = ['datetime', 'date', 'text_required', 'any', 'number'];
-  // date_ordered required; date_expected/date_received/date_depleted optional (lifecycle phases).
-  colTypes[MED_SYR_SHEET]   = ['number', 'text_required', 'date', 'date', 'date', 'date', 'text'];
-  colTypes[MED_SHOTS_SHEET] = ['datetime', 'date', 'number', 'number', 'text'];
+  // colTypes derived above from SCHEMA_TYPES via SCHEMA_MAP.
 
   function isOk(val, type) {
     if (type === 'any') return true;
@@ -1067,14 +1122,15 @@ function resetMeds() {
 // Run once from the Apps Script editor (safe to re-run — uses ensure pattern).
 function initMeds() {
   const ss = _ss();
-  function ensure(name, headers) {
+  function ensure(name, schemaKey) {
     let sh = ss.getSheetByName(name);
     if (!sh) sh = ss.insertSheet(name);
-    if (sh.getLastRow() === 0) sh.appendRow(headers);
+    if (sh.getLastRow() === 0) sh.appendRow(SCHEMA[schemaKey]);
+    applySheetFormatting(sh, schemaKey);
     return sh;
   }
-  ensure(MED_SYR_SHEET,   SCHEMA.med_syr);
-  ensure(MED_SHOTS_SHEET, SCHEMA.med_shots);
+  ensure(MED_SYR_SHEET,   'med_syr');
+  ensure(MED_SHOTS_SHEET, 'med_shots');
   return 'Med sheets ready (MedSyringes, MedShots).';
 }
 
@@ -1288,28 +1344,43 @@ function getMedHistory(days) {
 // Returns one entry per sheet: ok (bool), and per-column match status.
 // Called by the Schema tab in Configure — never runs automatically.
 function validateSheets() {
-  const ss = _ss();
-  const targets = [
-    [WEIGHT_SHEET,    SCHEMA.weight],
-    [FOODS_SHEET,     SCHEMA.foods],
-    [FOOD_LOG_SHEET,  SCHEMA.food_log],
-    [ACT_SHEET,       SCHEMA.act],
-    [ACT_LOG_SHEET,   SCHEMA.act_log],
-    [MED_SYR_SHEET,   SCHEMA.med_syr],
-    [MED_SHOTS_SHEET, SCHEMA.med_shots]
-  ];
-  return targets.map(function(pair) {
-    var name   = pair[0];
-    var schema = pair[1];
+  var ss = _ss();
+  return SCHEMA_MAP.map(function(entry) {
+    var name   = entry.name;
+    var schema = SCHEMA[entry.key];
+    var types  = SCHEMA_TYPES[entry.key];
     var sh     = ss.getSheetByName(name);
-    if (!sh) return { sheet: name, exists: false, ok: false, cols: [] };
+    if (!sh) return { sheet: name, exists: false, ok: false, cols: [], fmt: {} };
+
+    // Column header check
     var ncols  = Math.max(sh.getLastColumn(), schema.length);
-    var actual = sh.getLastRow() > 0
-      ? sh.getRange(1, 1, 1, ncols).getValues()[0]
-      : [];
-    var cols = schema.map(function(exp, i) {
+    var actual = sh.getLastRow() > 0 ? sh.getRange(1, 1, 1, ncols).getValues()[0] : [];
+    var cols   = schema.map(function(exp, i) {
       return { col: i + 1, expected: exp, actual: actual[i] || '', ok: (actual[i] || '') === exp };
     });
-    return { sheet: name, exists: true, ok: cols.every(function(c) { return c.ok; }), cols: cols };
+
+    // Formatting checks
+    var headerBold   = sh.getRange(1, 1).getFontWeight() === 'bold';
+    var topFrozen    = sh.getFrozenRows() >= 1;
+    var filterExists = sh.getFilter() !== null;
+
+    // Date column format check — sample row 2 (if present)
+    var lastRow = sh.getLastRow();
+    var dateCols = [];
+    schema.forEach(function(col, i) {
+      var t = types[col];
+      if (t !== 'date' && t !== 'datetime') return;
+      var expected = t === 'date' ? DATE_FORMAT : DATETIME_FORMAT;
+      var actual_fmt = lastRow > 1 ? sh.getRange(2, i + 1).getNumberFormat() : '';
+      dateCols.push({ col: col, expected: expected, actual: actual_fmt, ok: actual_fmt === expected });
+    });
+
+    var fmtOk = headerBold && topFrozen && filterExists && dateCols.every(function(d) { return d.ok; });
+    return {
+      sheet: name, exists: true,
+      ok: cols.every(function(c) { return c.ok; }) && fmtOk,
+      cols: cols,
+      fmt: { header_bold: headerBold, top_frozen: topFrozen, filter: filterExists, date_cols: dateCols, ok: fmtOk }
+    };
   });
 }

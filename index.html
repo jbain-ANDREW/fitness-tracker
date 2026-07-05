@@ -435,9 +435,16 @@
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <label style="margin-bottom:0;">Sheet / Code Alignment</label>
-        <button class="small blue" onclick="runSchemaCheck()">Check Now</button>
+        <div style="display:flex;gap:8px;">
+          <button class="small blue" onclick="runSchemaCheck()">Check Now</button>
+          <button class="small grey" onclick="runFormatFix()">Fix Formatting</button>
+        </div>
       </div>
-      <div class="empty" id="schema-result">Press "Check Now" to compare Sheet headers against the code's schema definitions.</div>
+      <div style="font-size:12px;color:#8e8e93;margin-bottom:12px;">
+        "Check Now" verifies column headers, bold rows, frozen panes, filters, and date column formats.<br>
+        "Fix Formatting" applies all formatting standards to every sheet immediately.
+      </div>
+      <div id="schema-result" class="empty">Press "Check Now" to verify all sheets.</div>
     </div>
   </div>
 
@@ -568,27 +575,53 @@ function runSchemaCheck() {
     .validateSheets();
 }
 
+function runFormatFix() {
+  const btn = event.currentTarget;
+  btn.disabled = true; btn.textContent = 'Fixing…';
+  google.script.run
+    .withSuccessHandler(msg => { toast('Formatting applied'); runSchemaCheck(); btn.disabled = false; btn.textContent = 'Fix Formatting'; })
+    .withFailureHandler(e => { toast('Error: ' + e.message); btn.disabled = false; btn.textContent = 'Fix Formatting'; })
+    .formatAllSheets();
+}
+
 function renderSchemaResult(results) {
   const el = document.getElementById('schema-result');
   if (!results || !results.length) { el.textContent = 'No results returned.'; return; }
   el.innerHTML = results.map(r => {
     if (!r.exists) return `<div style="margin-bottom:12px;"><b>${r.sheet}</b> <span style="color:#ff3b30;">⚠ Sheet not found</span></div>`;
     const icon = r.ok ? '✅' : '❌';
+
+    // Column header rows
     const colRows = r.cols.map(c =>
-      `<tr>
-        <td style="padding:3px 6px;color:#6e6e73;">${c.col}</td>
+      `<tr><td style="padding:3px 6px;color:#6e6e73;">${c.col}</td>
         <td style="padding:3px 6px;font-family:monospace;">${c.expected}</td>
         <td style="padding:3px 6px;font-family:monospace;color:${c.ok ? '#34c759' : '#ff3b30'};">${c.actual || '(blank)'}</td>
-        <td style="padding:3px 6px;">${c.ok ? '✓' : '✗ mismatch'}</td>
-      </tr>`
+        <td style="padding:3px 6px;">${c.ok ? '✓' : '✗'}</td></tr>`
     ).join('');
+
+    // Formatting summary
+    const f = r.fmt || {};
+    const fmtItems = [
+      { label: 'Bold header', ok: f.header_bold },
+      { label: 'Frozen row',  ok: f.top_frozen  },
+      { label: 'Filter',      ok: f.filter      }
+    ];
+    const dateFmtItems = (f.date_cols || []).map(d =>
+      `<span style="color:${d.ok ? '#34c759' : '#ff3b30'};margin-right:8px;">${d.ok ? '✓' : '✗'} ${d.col} (${d.expected})</span>`
+    ).join('');
+    const fmtHtml = `<div style="font-size:12px;margin-top:6px;color:#6e6e73;display:flex;flex-wrap:wrap;gap:8px;">
+      ${fmtItems.map(i => `<span style="color:${i.ok ? '#34c759' : '#ff3b30'};">${i.ok ? '✓' : '✗'} ${i.label}</span>`).join('')}
+      ${dateFmtItems}
+    </div>`;
+
     return `<div style="margin-bottom:16px;">
-      <div style="font-weight:700;margin-bottom:6px;">${icon} ${r.sheet}</div>
-      <table style="width:100%;font-size:12px;border-collapse:collapse;">
+      <div style="font-weight:700;margin-bottom:4px;">${icon} ${r.sheet}</div>
+      ${fmtHtml}
+      <table style="width:100%;font-size:12px;border-collapse:collapse;margin-top:6px;">
         <thead><tr style="color:#6e6e73;border-bottom:1px solid #e5e5ea;">
           <th style="text-align:left;padding:3px 6px;">#</th>
           <th style="text-align:left;padding:3px 6px;">Expected</th>
-          <th style="text-align:left;padding:3px 6px;">Actual</th>
+          <th style="text-align:left;padding:3px 6px;">Actual header</th>
           <th style="text-align:left;padding:3px 6px;"></th>
         </tr></thead>
         <tbody>${colRows}</tbody>
