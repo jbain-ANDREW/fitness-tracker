@@ -282,7 +282,7 @@
   <!-- Calories sub-pane -->
   <div id="hist-calories" style="display:none;">
     <div class="card">
-      <div style="font-size:13px;color:#6e6e73;margin-bottom:12px;">Last 7 days · <span style="color:#ff9500;">■</span> food &nbsp;·&nbsp; <span style="color:#34c759;">■</span> net (under goal) &nbsp;·&nbsp; <span style="color:#ff3b30;">■</span> net (over goal)</div>
+      <div style="font-size:13px;color:#6e6e73;margin-bottom:12px;">Last 7 days + today · <span style="color:#ff9500;">■</span> food &nbsp;·&nbsp; <span style="color:#34c759;">■</span> net (under goal) &nbsp;·&nbsp; <span style="color:#ff3b30;">■</span> net (over goal) &nbsp;·&nbsp; <span style="color:#ff9500;opacity:0.45;">■</span> today (in progress)</div>
       <div id="cal-chart-wrap"><div class="empty">Loading…</div></div>
     </div>
   </div>
@@ -1175,15 +1175,17 @@ function drawCalSvg() {
     const ds   = d.toISOString().slice(0, 10);
     const food = (foodData[ds] || {}).total_calories || 0;   // orange bar: raw food intake
     const net  = wtNetMap[ds] !== undefined ? Math.max(wtNetMap[ds], 0) : 0;  // green/red bar: pre-computed net
-    days.push({ date: ds, food, net });
+    days.push({ date: ds, food, net, isToday: false });
   }
+  // Today: food only (in progress), excluded from trend calcs
+  days.push({ date: TODAY, food: (foodData[TODAY] || {}).total_calories || 0, net: 0, isToday: true });
 
-  if (days.every(d => d.food === 0 && d.net === 0)) return '<div class="empty">No calorie data for the last 7 days.</div>';
+  if (days.slice(0, 7).every(d => d.food === 0 && d.net === 0)) return '<div class="empty">No calorie data for the last 7 days.</div>';
 
   const W = 440, H = 200, ML = 50, MR = 10, MT = 26, MB = 40;
   const PW = W - ML - MR, PH = H - MT - MB;
   const maxCal = 3000;
-  const slotW   = PW / 7;
+  const slotW   = PW / 8;
   const dayPad   = slotW * 0.10;
   const foodW    = slotW * 0.26;
   const intraGap = slotW * 0.05;
@@ -1212,34 +1214,44 @@ function drawCalSvg() {
     const rx = lx + foodW + intraGap;                    // net bar x
     const cx = ML + i * slotW + dayPad + (foodW + intraGap + netW) / 2;  // group center
 
-    // Left bar: food (orange, narrower)
-    if (d.food > 0) {
-      const fh = (d.food / maxCal) * PH;
-      bars += `<rect x="${lx.toFixed(1)}" y="${(MT + PH - fh).toFixed(1)}" width="${foodW.toFixed(1)}" height="${fh.toFixed(1)}" fill="#ff9500" rx="3"/>`;
-    }
-
-    // Right bar: net — green up to goal, red above (wider)
-    if (d.net > 0) {
-      const nh = (d.net / maxCal) * PH;
-      const ny = MT + PH - nh;
-      if (goal > 0 && d.net > goal) {
-        const goalH = (goal / maxCal) * PH;
-        const overH = nh - goalH;
-        bars += `<rect x="${rx.toFixed(1)}" y="${(MT + PH - goalH).toFixed(1)}" width="${netW.toFixed(1)}" height="${goalH.toFixed(1)}" fill="#34c759" rx="3"/>`;
-        bars += `<rect x="${rx.toFixed(1)}" y="${ny.toFixed(1)}" width="${netW.toFixed(1)}" height="${overH.toFixed(1)}" fill="#ff3b30" rx="2"/>`;
-      } else {
-        const col = goal > 0 ? '#34c759' : '#007aff';
-        bars += `<rect x="${rx.toFixed(1)}" y="${ny.toFixed(1)}" width="${netW.toFixed(1)}" height="${nh.toFixed(1)}" fill="${col}" rx="3"/>`;
+    if (d.isToday) {
+      // Today: food bar only, faded to signal in-progress
+      if (d.food > 0) {
+        const fh = (d.food / maxCal) * PH;
+        bars += `<rect x="${lx.toFixed(1)}" y="${(MT + PH - fh).toFixed(1)}" width="${foodW.toFixed(1)}" height="${fh.toFixed(1)}" fill="#ff9500" fill-opacity="0.45" rx="3"/>`;
+        bars += `<text x="${(lx + foodW / 2).toFixed(1)}" y="${(MT + PH - fh - 3).toFixed(1)}" text-anchor="middle" font-size="14" fill="#ff9500" fill-opacity="0.7" font-weight="600">${d.food}</text>`;
+      }
+      bars += `<text x="${cx.toFixed(1)}" y="${H - 6}" text-anchor="middle" font-size="16" fill="#007aff" font-weight="600">Today</text>`;
+    } else {
+      // Left bar: food (orange, narrower)
+      if (d.food > 0) {
+        const fh = (d.food / maxCal) * PH;
+        bars += `<rect x="${lx.toFixed(1)}" y="${(MT + PH - fh).toFixed(1)}" width="${foodW.toFixed(1)}" height="${fh.toFixed(1)}" fill="#ff9500" rx="3"/>`;
       }
 
-      // Net label above right bar
-      const lCol = (goal > 0 ? d.net < goal : true) ? '#34c759' : '#ff3b30';
-      bars += `<text x="${(rx + netW / 2).toFixed(1)}" y="${(ny - 3).toFixed(1)}" text-anchor="middle" font-size="14" fill="${lCol}" font-weight="600">${d.net}</text>`;
-    }
+      // Right bar: net — green up to goal, red above (wider)
+      if (d.net > 0) {
+        const nh = (d.net / maxCal) * PH;
+        const ny = MT + PH - nh;
+        if (goal > 0 && d.net > goal) {
+          const goalH = (goal / maxCal) * PH;
+          const overH = nh - goalH;
+          bars += `<rect x="${rx.toFixed(1)}" y="${(MT + PH - goalH).toFixed(1)}" width="${netW.toFixed(1)}" height="${goalH.toFixed(1)}" fill="#34c759" rx="3"/>`;
+          bars += `<rect x="${rx.toFixed(1)}" y="${ny.toFixed(1)}" width="${netW.toFixed(1)}" height="${overH.toFixed(1)}" fill="#ff3b30" rx="2"/>`;
+        } else {
+          const col = goal > 0 ? '#34c759' : '#007aff';
+          bars += `<rect x="${rx.toFixed(1)}" y="${ny.toFixed(1)}" width="${netW.toFixed(1)}" height="${nh.toFixed(1)}" fill="${col}" rx="3"/>`;
+        }
 
-    // Day label centered under the bar group
-    const dow = ['Su','Mo','Tu','We','Th','Fr','Sa'][new Date(d.date + 'T12:00:00').getDay()];
-    bars += `<text x="${cx.toFixed(1)}" y="${H - 6}" text-anchor="middle" font-size="16" fill="#8e8e93">${dow}</text>`;
+        // Net label above right bar
+        const lCol = (goal > 0 ? d.net < goal : true) ? '#34c759' : '#ff3b30';
+        bars += `<text x="${(rx + netW / 2).toFixed(1)}" y="${(ny - 3).toFixed(1)}" text-anchor="middle" font-size="14" fill="${lCol}" font-weight="600">${d.net}</text>`;
+      }
+
+      // Day label centered under the bar group
+      const dow = ['Su','Mo','Tu','We','Th','Fr','Sa'][new Date(d.date + 'T12:00:00').getDay()];
+      bars += `<text x="${cx.toFixed(1)}" y="${H - 6}" text-anchor="middle" font-size="16" fill="#8e8e93">${dow}</text>`;
+    }
   });
 
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;">${yLines}${bars}</svg>`;
