@@ -145,10 +145,10 @@
     .chart-controls select, .chart-controls input { font-size: 15px; padding: 8px 10px; }
     .cal-stat-group       { margin-top: 18px; }
     .cal-stat-group-label { font-size: 12px; font-weight: 700; color: #8e8e93; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
-    .cal-stats       { display: flex; gap: 32px; padding: 4px 2px; }
-    .cal-stat        { display: flex; flex-direction: column; gap: 3px; }
+    .cal-stats       { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; padding: 4px 2px; }
+    .cal-stat        { display: flex; flex-direction: column; gap: 2px; }
     .cal-stat-label  { font-size: 13px; color: #8e8e93; font-weight: 500; }
-    .cal-stat-value  { font-size: 36px; font-weight: 700; line-height: 1; }
+    .cal-stat-value  { font-size: 22px; font-weight: 700; line-height: 1; }
     .cal-stat-sub    { font-size: 12px; color: #8e8e93; }
   </style>
 </head>
@@ -1111,32 +1111,36 @@ function drawCalStats() {
     return avgLoss / (avgDef / 3500);
   }
 
-  function stat(label, value, sub, color) {
-    const v = value === null
+  function stat(label, value) {
+    const v = value === null || value === undefined
       ? `<div class="cal-stat-value" style="color:#8e8e93">—</div>`
-      : `<div class="cal-stat-value" style="color:${color || '#1c1c1e'}">${value}</div>`;
-    return `<div class="cal-stat"><div class="cal-stat-label">${label}</div>${v}${sub ? `<div class="cal-stat-sub">${sub}</div>` : ''}</div>`;
+      : `<div class="cal-stat-value" style="color:#007aff">${value}</div>`;
+    return `<div class="cal-stat"><div class="cal-stat-label">${label}</div>${v}</div>`;
+  }
+
+  function _fmt1(n) {
+    // toFixed(1) never produces scientific notation and gives 0.0 for near-zero values
+    const s = n.toFixed(1);
+    return s === '-0.0' ? '0.0' : s;
   }
 
   function deficitStat(label, since) {
     const vals = deficitsIn(since);
     if (!vals.length) return stat(label, null);
-    const avg = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
-    return stat(label, `${avg >= 0 ? '+' : ''}${avg}`, `${vals.length} days`, avg >= 0 ? '#34c759' : '#ff3b30');
+    const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+    return stat(label, `${avg >= 0 ? '+' : ''}${_fmt1(avg)}`);
   }
 
   function weightLossStat(label, since) {
     const val = avgWeeklyLoss(since);
     if (val === null) return stat(label, null);
-    const n = wtDeltasIn(since).length;
-    return stat(label, `${val.toFixed(1)} lbs`, `${n} intervals`, val >= 0 ? '#34c759' : '#ff3b30');
+    return stat(label, `${_fmt1(val)} lbs`);
   }
 
   function efficiencyStat(label, since) {
     const r = efficiency(since);
     if (r === null) return stat(label, null);
-    const color = r < 0 ? '#ff3b30' : (r >= 0.7 && r <= 1.4 ? '#34c759' : '#ff9500');
-    return stat(label, parseFloat(r.toPrecision(2)).toString(), null, color);
+    return stat(label, _fmt1(r));
   }
 
   const s7 = sinceDate(8), s14 = sinceDate(15), s30 = sinceDate(31);
