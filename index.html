@@ -1122,10 +1122,11 @@ function drawCalStats() {
     return avgLoss / (avgDef / 3500);
   }
 
-  function stat(label, value) {
+  function stat(label, value, color) {
+    const c = color || '#007aff';
     const v = value === null || value === undefined
       ? `<div class="cal-stat-value" style="color:#8e8e93">—</div>`
-      : `<div class="cal-stat-value" style="color:#007aff">${value}</div>`;
+      : `<div class="cal-stat-value" style="color:${c}">${value}</div>`;
     return `<div class="cal-stat"><div class="cal-stat-label">${label}</div>${v}</div>`;
   }
 
@@ -1139,13 +1140,13 @@ function drawCalStats() {
     const vals = deficitsIn(since);
     if (!vals.length) return stat(label, null);
     const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
-    return stat(label, `${avg >= 0 ? '+' : ''}${_fmt1(avg)}`);
+    return stat(label, `${avg >= 0 ? '+' : ''}${_fmt1(avg)}`, avg >= 0 ? '#34c759' : '#ff3b30');
   }
 
   function weightLossStat(label, since) {
     const val = avgWeeklyLoss(since);
     if (val === null) return stat(label, null);
-    return stat(label, `${_fmt1(val)} lbs`);
+    return stat(label, `${_fmt1(val)} lbs`, val >= 0 ? '#34c759' : '#ff3b30');
   }
 
   function efficiencyStat(label, since) {
