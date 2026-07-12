@@ -1030,8 +1030,19 @@ function drawWeightSvg() {
     `<text x="${cx(p).toFixed(1)}" y="${H - 3}" text-anchor="middle" font-size="10" fill="#8e8e93">${p.date.slice(5)}</text>`
   ).join('');
 
+  // Reference line: 1 lb/week loss slope, middle half of chart, floated above the data
+  const meanCy      = pts.reduce((s, p) => s + cy(p), 0) / pts.length;
+  const cyCtr       = Math.max(MT + 10, meanCy - 14);          // 14px above mean data position
+  const dyCyPerMs   = (1 / 7 / 86400000) * (PH / yR);          // px per ms for 1 lb/wk slope
+  const halfSpanMs  = tR * 0.25;                                 // half of the middle-half span
+  const rxMid       = ML + PW * 0.5;
+  const rx1 = rxMid - PW * 0.25,  ry1 = cyCtr - dyCyPerMs * halfSpanMs;
+  const rx2 = rxMid + PW * 0.25,  ry2 = cyCtr + dyCyPerMs * halfSpanMs;
+  const refLine = `<line x1="${rx1.toFixed(1)}" y1="${ry1.toFixed(1)}" x2="${rx2.toFixed(1)}" y2="${ry2.toFixed(1)}" stroke="#8e8e93" stroke-width="1.5" stroke-opacity="0.4" stroke-dasharray="4,3"/>` +
+    `<text x="${(rx2 + 3).toFixed(1)}" y="${(ry2 + 3).toFixed(1)}" font-size="9" fill="#8e8e93" fill-opacity="0.7">1lb/wk</text>`;
+
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;">
-    ${grid}
+    ${grid}${refLine}
     <path d="${path}" fill="none" stroke="#007aff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
     ${dots}${yLabels}${xLabels}
   </svg>`;
