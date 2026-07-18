@@ -518,19 +518,20 @@ function _attr(s) { return JSON.stringify(s).replace(/"/g, '&quot;'); }
 // ── State ─────────────────────────────────────────────────────────────────────
 const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 const S = {
-  foods:      [],
-  activities: [],
-  wt:         { weight: null },
-  food:       { entries: [], total_calories: 0 },
-  acts:       [],
-  logDate:    TODAY,
-  histData:   null,
-  histTab:    'weight',
-  goal:       0,
-  sheet_url:  '',
-  bmr:        {},
-  tdee:       0,
-  cal_target: 0
+  foods:          [],
+  activities:     [],
+  wt:             { weight: null },
+  food:           { entries: [], total_calories: 0 },
+  acts:           [],
+  logDate:        TODAY,
+  histWeightData: null, // fast: just {weight, goal} — loaded on History tab open
+  histFullData:   null, // full: includes calorie stats — loaded lazily on Calories/Activities tab
+  histTab:        'weight',
+  goal:           0,
+  sheet_url:      '',
+  bmr:            {},
+  tdee:           0,
+  cal_target:     0
 };
 
 // ── Date display ─────────────────────────────────────────────────────────────
@@ -549,7 +550,7 @@ function showTab(name, el) {
   document.getElementById('pane-' + name).classList.add('active');
   el.classList.add('active');
   if (name === 'history') {
-    if (!S.histData) loadHistory();
+    if (!S.histWeightData && !S.histFullData) loadHistoryWeight();
     else renderHistTab(S.histTab);
   }
   if (name === 'configure') {
@@ -637,8 +638,13 @@ function showHistTab(name, el) {
   );
   el.classList.add('active');
   S.histTab = name;
-  if (!S.histData) { loadHistory(); return; }
-  renderHistTab(name);
+  if (name === 'weight') {
+    if (!S.histWeightData && !S.histFullData) { loadHistoryWeight(); return; }
+    renderHistWeight();
+  } else {
+    if (!S.histFullData) { loadHistoryFull(); return; }
+    renderHistTab(name);
+  }
 }
 
 function renderHistTab(name) {
@@ -704,9 +710,23 @@ function loadConfigData() {
     .getDateSummary(S.logDate);
 }
 
-function loadHistory() {
+function loadHistoryWeight() {
   google.script.run
-    .withSuccessHandler(data => { S.histData = data; S.goal = data.goal || S.goal; renderHistTab(S.histTab); })
+    .withSuccessHandler(data => { S.histWeightData = data; S.goal = data.goal || S.goal; renderHistWeight(); })
+    .withFailureHandler(e => toast('History error: ' + e.message))
+    .getWeightHistoryFast(90);
+}
+
+function loadHistoryFull() {
+  document.getElementById('cal-chart-wrap').innerHTML  = '<div class="empty">Loading…</div>';
+  document.getElementById('hist-acts-content').innerHTML = '<div class="card"><div class="empty">Loading…</div></div>';
+  google.script.run
+    .withSuccessHandler(data => {
+      S.histFullData   = data;
+      S.histWeightData = data; // full data also serves the weight chart
+      S.goal = data.goal || S.goal;
+      renderHistTab(S.histTab);
+    })
     .withFailureHandler(e => toast('History error: ' + e.message))
     .getHistoryPage(90);
 }
@@ -986,14 +1006,15 @@ function renderHistWeight() {
 }
 
 function drawWeightSvg() {
-  if (!S.histData) return '<div class="empty">Loading…</div>';
+  const hd = S.histFullData || S.histWeightData;
+  if (!hd) return '<div class="empty">Loading…</div>';
   const days   = parseInt(document.getElementById('wt-days').value) || 30;
   const manMin = parseFloat(document.getElementById('wt-ymin').value);
   const manMax = parseFloat(document.getElementById('wt-ymax').value);
 
   const cutoff = new Date(TODAY + 'T00:00:00');
   cutoff.setDate(cutoff.getDate() - days);
-  const pts = (S.histData.weight || []).filter(p => new Date(p.date + 'T00:00:00') >= cutoff);
+  const pts = (hd.weight || []).filter(p => new Date(p.date + 'T00:00:00') >= cutoff);
 
   if (!pts.length) return '<div class="empty">No weight data for this period.</div>';
 
@@ -1049,6 +1070,7 @@ function drawWeightSvg() {
 }
 
 function renderHistCalories() {
+  if (!S.histFullData) { loadHistoryFull(); return; }
   document.getElementById('cal-chart-wrap').innerHTML = drawCalSvg() + drawCalStats();
 }
 
@@ -1058,11 +1080,11 @@ function renderHistCalories() {
 // weekly weight-loss rate and deficit "efficiency" (actual loss vs. what the
 // logged calorie deficit predicts) over 7/14/30-day and all-time windows.
 function drawCalStats() {
-  if (!S.histData) return '';
+  if (!S.histFullData) return '';
   if (!S.bmr || !S.bmr.goalLbsWeek) return '';
 
   // Build per-row maps from pre-computed Weight sheet columns.
-  const wtList       = (S.histData.weight || []).slice().sort((a, b) => a.date.localeCompare(b.date));
+  const wtList       = (S.histFullData.weight || []).slice().sort((a, b) => a.date.localeCompare(b.date));
   const goalDailyDef = Math.round(((S.bmr && S.bmr.goalLbsWeek) || 0) * 3500 / 7);
   const wtDefMap     = {};  // date → cal_deficit (TDEE − net_cal per-day weight)
   const wtGoalMap    = {};  // date → cal_deficit − goal_daily_deficit (positive = ahead of goal)
@@ -1173,14 +1195,14 @@ function drawCalStats() {
 }
 
 function drawCalSvg() {
-  if (!S.histData) return '<div class="empty">Loading…</div>';
-  const foodData = S.histData.food || {};
+  if (!S.histFullData) return '<div class="empty">Loading…</div>';
+  const foodData = S.histFullData.food || {};
   // Prefer BMR-computed target at today's weight; fall back to manual goal
-  const goal     = S.cal_target || S.histData.goal || S.goal || 0;
+  const goal     = S.cal_target || S.histFullData.goal || S.goal || 0;
 
   // Net calories from pre-computed Weight sheet columns.
   const wtNetMap = {};
-  (S.histData.weight || []).forEach(p => {
+  (S.histFullData.weight || []).forEach(p => {
     if (p.net_calories !== null && p.net_calories !== undefined) wtNetMap[p.date] = p.net_calories;
   });
 
@@ -1274,12 +1296,9 @@ function drawCalSvg() {
 }
 
 function renderHistActivities() {
-  if (!S.histData) {
-    document.getElementById('hist-acts-content').innerHTML = '<div class="card"><div class="empty">Loading…</div></div>';
-    return;
-  }
-  const actData  = S.histData.activities       || {};
-  const actsConf = S.histData.activities_config || [];
+  if (!S.histFullData) { loadHistoryFull(); return; }
+  const actData  = S.histFullData.activities       || {};
+  const actsConf = S.histFullData.activities_config || [];
 
   const dates = [];
   for (let i = 13; i >= 0; i--) {

@@ -905,6 +905,25 @@ function getDateSummary(date) {
 
 function getTodaySummary() { return getDateSummary(_today()); }
 
+// Fast weight-only history: reads 2 columns from the Weight sheet, no computation, no write-back.
+// Used by the History weight chart so it loads without waiting for calorie stats.
+function getWeightHistoryFast(days) {
+  days = parseInt(days) || 90;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  const co  = cutoff.toISOString().slice(0, 10);
+  const sh  = _sheet(WEIGHT_SHEET);
+  const lastRow = sh.getLastRow();
+  if (lastRow < 2) return { weight: [], goal: getGoal() };
+  const rows = sh.getRange(2, 1, lastRow - 1, 2).getValues(); // date + weight only
+  const weight = rows
+    .filter(r => r[0] && parseFloat(r[1]))
+    .map(r => ({ date: _dateStr(r[0]), weight: Math.round(parseFloat(r[1]) * 10) / 10 }))
+    .filter(r => r.date >= co)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  return { weight, goal: getGoal() };
+}
+
 function getHistoryPage(days) {
   days = parseInt(days) || 30;
   const cutoff = new Date();
