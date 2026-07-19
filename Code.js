@@ -6,8 +6,9 @@ const FOOD_LOG_SHEET  = 'FoodLog';
 const ACT_SHEET       = 'Activities';
 const ACT_LOG_SHEET   = 'ActivityLog';
 const MED_SYR_SHEET   = 'MedSyringes';
-const MED_SHOTS_SHEET = 'MedShots';
+const MED_SHOTS_SHEET   = 'MedShots';
 const SHOTS_PER_SYRINGE = 4;
+const WORKOUT_LOG_SHEET = 'WorkoutLog';
 
 const _SCRIPT_CACHE = CacheService.getScriptCache();
 const _CFG_TTL = 300; // foods/activities rarely change — 5-minute cache
@@ -29,7 +30,8 @@ const SCHEMA = {
   act:       ['name', 'type', 'unit', 'goal', 'calories', 'cal_weight1', 'cal_per_unit1', 'cal_weight2', 'cal_per_unit2'],
   act_log:   ['timestamp', 'date', 'activity_name', 'value', 'calories_burned'],
   med_syr:   ['syringe_id', 'order_id', 'date_ordered', 'date_expected', 'date_received', 'date_depleted', 'notes'],
-  med_shots: ['timestamp', 'date', 'syringe_id', 'shot_num', 'notes']
+  med_shots:   ['timestamp', 'date', 'syringe_id', 'shot_num', 'notes'],
+  workout_log: ['timestamp', 'date', 'warmup', 'push', 'pull', 'legs', 'core', 'cooldown', 'notes']
 };
 
 // Column data types — used by auditAndFixSheets() and applySheetFormatting().
@@ -41,7 +43,8 @@ const SCHEMA_TYPES = {
   act:       { name: 'text_required', type: 'text', unit: 'text', goal: 'text', calories: 'number', cal_weight1: 'number_optional', cal_per_unit1: 'number_optional', cal_weight2: 'number_optional', cal_per_unit2: 'number_optional' },
   act_log:   { timestamp: 'datetime', date: 'date', activity_name: 'text_required', value: 'any', calories_burned: 'number' },
   med_syr:   { syringe_id: 'number', order_id: 'text_required', date_ordered: 'date', date_expected: 'date', date_received: 'date', date_depleted: 'date', notes: 'text' },
-  med_shots: { timestamp: 'datetime', date: 'date', syringe_id: 'number', shot_num: 'number', notes: 'text' }
+  med_shots:   { timestamp: 'datetime', date: 'date', syringe_id: 'number', shot_num: 'number', notes: 'text' },
+  workout_log: { timestamp: 'datetime', date: 'date', warmup: 'text', push: 'text', pull: 'text', legs: 'text', core: 'text', cooldown: 'text', notes: 'text' }
 };
 
 // Date display formats — applied to 'date' and 'datetime' columns in all sheets.
@@ -58,7 +61,8 @@ const FL = _mkCols(SCHEMA.food_log);  // FL.timestamp, FL.date, FL.food_name, �
 const A  = _mkCols(SCHEMA.act);       // A.name, A.type, A.calories, …
 const AL = _mkCols(SCHEMA.act_log);   // AL.timestamp, AL.date, AL.activity_name, …
 const MS = _mkCols(SCHEMA.med_syr);   // MS.syringe_id, MS.order_id, MS.date_received, …
-const MH = _mkCols(SCHEMA.med_shots); // MH.timestamp, MH.date, MH.syringe_id, …
+const MH = _mkCols(SCHEMA.med_shots);    // MH.timestamp, MH.date, MH.syringe_id, …
+const WL = _mkCols(SCHEMA.workout_log); // WL.timestamp, WL.date, WL.warmup, …
 
 // SCHEMA_MAP ties sheet constants to their schema/types for iteration.
 // Used by validateSheets(), formatAllSheets(), and auditAndFixSheets().
@@ -69,7 +73,8 @@ const SCHEMA_MAP = [
   { name: ACT_SHEET,       key: 'act'       },
   { name: ACT_LOG_SHEET,   key: 'act_log'   },
   { name: MED_SYR_SHEET,   key: 'med_syr'   },
-  { name: MED_SHOTS_SHEET, key: 'med_shots' }
+  { name: MED_SHOTS_SHEET,   key: 'med_shots'   },
+  { name: WORKOUT_LOG_SHEET, key: 'workout_log' }
 ];
 
 function doGet() {
@@ -172,11 +177,12 @@ function initFitness() {
     return sh;
   }
 
-  ensure(WEIGHT_SHEET,   'weight');
-  ensure(FOODS_SHEET,    'foods');
-  ensure(FOOD_LOG_SHEET, 'food_log');
-  ensure(ACT_SHEET,      'act');
-  ensure(ACT_LOG_SHEET,  'act_log');
+  ensure(WEIGHT_SHEET,    'weight');
+  ensure(FOODS_SHEET,     'foods');
+  ensure(FOOD_LOG_SHEET,  'food_log');
+  ensure(ACT_SHEET,       'act');
+  ensure(ACT_LOG_SHEET,   'act_log');
+  ensure(WORKOUT_LOG_SHEET, 'workout_log');
 
   return 'Fitness Tracker initialized. Spreadsheet: ' + ss.getUrl();
 }
@@ -1414,6 +1420,59 @@ function getMedHistory(days) {
   return [...shots, ...receives, ...Object.values(orders)]
     .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
     .slice(0, 60);
+}
+
+// ── Workout log ───────────────────────────────────────────────────────────────
+// Stores one row per LA Fitness session: which exercise was chosen from each
+// category (warmup / push / pull / legs / core / cooldown) plus optional notes.
+// Not linked to calorie accounting — that connection can be added later.
+
+// Run from the Apps Script editor to create the WorkoutLog sheet (safe to re-run).
+function initWorkout() {
+  const ss = _ss();
+  let sh = ss.getSheetByName(WORKOUT_LOG_SHEET);
+  if (!sh) sh = ss.insertSheet(WORKOUT_LOG_SHEET);
+  if (sh.getLastRow() === 0) sh.appendRow(SCHEMA.workout_log);
+  applySheetFormatting(sh, 'workout_log');
+  return 'WorkoutLog sheet ready.';
+}
+
+function logWorkout(date, data) {
+  const d = date || _today();
+  _sheet(WORKOUT_LOG_SHEET).appendRow([
+    _ts(), d,
+    data.warmup   || '',
+    data.push     || '',
+    data.pull     || '',
+    data.legs     || '',
+    data.core     || '',
+    data.cooldown || '',
+    data.notes    || ''
+  ]);
+  return getWorkoutLog(30);
+}
+
+function getWorkoutLog(days) {
+  days = parseInt(days) || 30;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  const sh = _sheet(WORKOUT_LOG_SHEET);
+  if (!sh || sh.getLastRow() < 2) return [];
+  const rows = sh.getRange(2, 1, sh.getLastRow() - 1, SCHEMA.workout_log.length).getValues();
+  return rows
+    .filter(r => r[WL.timestamp] && new Date(_dateStr(r[WL.date]) + 'T12:00:00') >= cutoff)
+    .map(r => ({
+      timestamp: _tsStr(r[WL.timestamp]),
+      date:      _dateStr(r[WL.date]),
+      warmup:    String(r[WL.warmup]   || ''),
+      push:      String(r[WL.push]     || ''),
+      pull:      String(r[WL.pull]     || ''),
+      legs:      String(r[WL.legs]     || ''),
+      core:      String(r[WL.core]     || ''),
+      cooldown:  String(r[WL.cooldown] || ''),
+      notes:     String(r[WL.notes]    || '')
+    }))
+    .sort((a, b) => b.date.localeCompare(a.date));
 }
 
 // ── Schema validation — on-demand only (reads Sheet header rows via Sheets API)

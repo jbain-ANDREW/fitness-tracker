@@ -150,6 +150,18 @@
     .cal-stat-label  { font-size: 13px; color: #8e8e93; font-weight: 500; }
     .cal-stat-value  { font-size: 22px; font-weight: 700; line-height: 1; }
     .cal-stat-sub    { font-size: 12px; color: #8e8e93; }
+
+    /* Workout checklist */
+    .wo-label { font-size: 13px; font-weight: 700; color: #6e6e73; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 8px; }
+    .wo-opts { display: flex; flex-direction: column; gap: 5px; }
+    .wo-opt { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 10px; background: #f2f2f7; cursor: pointer; }
+    .wo-opt input[type=radio] { width: 20px; height: 20px; flex-shrink: 0; accent-color: #007aff; cursor: pointer; }
+    .wo-opt label { font-size: 16px; font-weight: 500; color: #1c1c1e; cursor: pointer; flex: 1; }
+    .wo-opt:has(input:checked) { background: #e8f0fe; }
+    .wo-pill { background: #007aff; color: white; border-radius: 6px; padding: 3px 8px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+    .wo-pill.dim { opacity: 0.6; }
+    .wo-history-item { padding: 10px 0; border-bottom: 1px solid #f2f2f7; }
+    .wo-history-item:last-child { border-bottom: none; }
   </style>
 </head>
 <body>
@@ -162,7 +174,8 @@
 <div class="tabs" id="main-tabs">
   <div class="tab active" onclick="showTab('log', this)">📋 Log</div>
   <div class="tab" onclick="showTab('history', this)">📅 History</div>
-  <div class="tab" onclick="showTab('configure', this)">⚙️ Configure</div>
+  <div class="tab" onclick="showTab('workout', this)">🏋️ Workout</div>
+  <div class="tab" onclick="showTab('configure', this)">⚙️ Config</div>
   <div class="tab" onclick="showTab('meds', this)">💊 Meds</div>
 </div>
 
@@ -509,6 +522,32 @@
 
 </div>
 
+<!-- ══ WORKOUT ══════════════════════════════════════════════════════════════ -->
+<div id="pane-workout" class="pane">
+
+  <div class="card" style="margin-bottom:12px;">
+    <label>Session Date</label>
+    <div id="workout-day-display" style="font-size:20px;font-weight:600;color:#1c1c1e;margin-bottom:8px;"></div>
+    <input type="date" id="workout-date" onchange="updateWorkoutDayDisplay()">
+  </div>
+
+  <!-- Exercise checklist — rendered by renderWorkoutMenu() -->
+  <div id="workout-menu"></div>
+
+  <div class="card">
+    <label>Notes (optional)</label>
+    <textarea id="workout-notes" placeholder="How did it go? Any modifications?"></textarea>
+  </div>
+
+  <button class="primary" onclick="doLogWorkout()">Log Workout</button>
+
+  <div class="card" style="margin-top:16px;">
+    <div class="section-title">Recent Sessions</div>
+    <div id="workout-history"><div class="empty">Loading…</div></div>
+  </div>
+
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -557,7 +596,8 @@ function showTab(name, el) {
     renderConfig();
     if (!S.foods.length && !S.activities.length) loadConfigData();
   }
-  if (name === 'meds') loadMeds();
+  if (name === 'meds')    loadMeds();
+  if (name === 'workout') loadWorkout();
 }
 
 function showConfigTab(name, el) {
@@ -1760,6 +1800,124 @@ function medSaveOrder() {
     .withSuccessHandler(st => { _medStatus = st; renderMedStatus(st); toast(`Order placed — syringe${qty > 1 ? 's' : ''} #${st.syringes.slice(-qty).map(s=>s.syringe_id).join(', #')} reserved`); toggleMedOrderForm(); loadMeds(); })
     .withFailureHandler(e => toast('Error: ' + e.message))
     .placeMedOrder(ordered, expected, qty, notes);
+}
+
+// ── Workout ───────────────────────────────────────────────────────────────────
+
+const WORKOUT_MENU = [
+  { key: 'warmup',   label: 'Warmup · 15 min', options: ['Recumbent bike', 'Treadmill', 'Elliptical'] },
+  { key: 'push',     label: 'Push',             options: ['Dumbbell chest press', 'Incline push-up', 'Wall push-up'] },
+  { key: 'pull',     label: 'Pull',             options: ['One-arm dumbbell row', 'TRX row', 'Band row'] },
+  { key: 'legs',     label: 'Legs',             options: ['Goblet squat', 'Supported squat', 'Leg press', 'Step-ups', 'Sit-to-stand'] },
+  { key: 'core',     label: 'Core',             options: ['Bird dog', 'Dead bug', 'Modified plank', 'Side plank'] },
+  { key: 'cooldown', label: 'Cool-down',        options: ['Recumbent bike', 'Treadmill', 'Elliptical'], optional: true }
+];
+
+function loadWorkout() {
+  const dateEl = document.getElementById('workout-date');
+  if (dateEl && !dateEl.value) { dateEl.value = TODAY; updateWorkoutDayDisplay(); }
+  renderWorkoutMenu();
+  google.script.run
+    .withSuccessHandler(entries => renderWorkoutHistory(entries))
+    .withFailureHandler(e => toast('Workout error: ' + e.message))
+    .getWorkoutLog(30);
+}
+
+function updateWorkoutDayDisplay() {
+  const d  = document.getElementById('workout-date').value;
+  const el = document.getElementById('workout-day-display');
+  if (!d || !el) return;
+  el.textContent = new Date(d + 'T12:00:00').toLocaleDateString('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric'
+  });
+}
+
+function renderWorkoutMenu() {
+  document.getElementById('workout-menu').innerHTML = WORKOUT_MENU.map(section => {
+    const hint = section.optional
+      ? ' <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#8e8e93;font-size:12px;">(optional)</span>'
+      : '';
+    const opts = section.options.map((opt, i) => {
+      const id = 'wo-' + section.key + '-' + i;
+      return `<div class="wo-opt">
+        <input type="radio" name="wo-${section.key}" id="${id}" value="${opt}">
+        <label for="${id}">${opt}</label>
+      </div>`;
+    }).join('');
+    const skipOpt = section.optional
+      ? `<div class="wo-opt">
+           <input type="radio" name="wo-${section.key}" id="wo-${section.key}-skip" value="">
+           <label for="wo-${section.key}-skip" style="color:#8e8e93;">Skip</label>
+         </div>`
+      : '';
+    return `<div class="card">
+      <div class="wo-label">${section.label}${hint}</div>
+      <div class="wo-opts">${opts}${skipOpt}</div>
+    </div>`;
+  }).join('');
+}
+
+function doLogWorkout() {
+  const date = document.getElementById('workout-date').value;
+  if (!date) { toast('Pick a date'); return; }
+
+  const data = {};
+  WORKOUT_MENU.forEach(function(section) {
+    const checked = document.querySelector('input[name="wo-' + section.key + '"]:checked');
+    data[section.key] = checked ? checked.value : '';
+  });
+  data.notes = document.getElementById('workout-notes').value.trim();
+
+  const missing = WORKOUT_MENU.filter(s => !s.optional && !data[s.key]);
+  if (missing.length) {
+    toast('Pick an exercise for: ' + missing.map(s => s.label).join(', '));
+    return;
+  }
+
+  const btn = document.querySelector('#pane-workout .primary');
+  btn.disabled = true; btn.textContent = 'Logging…';
+
+  google.script.run
+    .withSuccessHandler(function(entries) {
+      renderWorkoutHistory(entries);
+      WORKOUT_MENU.forEach(function(s) {
+        const chk = document.querySelector('input[name="wo-' + s.key + '"]:checked');
+        if (chk) chk.checked = false;
+      });
+      document.getElementById('workout-notes').value = '';
+      btn.disabled = false; btn.textContent = 'Log Workout';
+      toast('Workout logged ✓');
+    })
+    .withFailureHandler(function(e) {
+      toast('Error: ' + e.message);
+      btn.disabled = false; btn.textContent = 'Log Workout';
+    })
+    .logWorkout(date, data);
+}
+
+function renderWorkoutHistory(entries) {
+  const el = document.getElementById('workout-history');
+  if (!entries || !entries.length) { el.innerHTML = '<div class="empty">No sessions yet.</div>'; return; }
+  el.innerHTML = entries.slice(0, 8).map(function(e) {
+    const dateStr = new Date(e.date + 'T12:00:00').toLocaleDateString('en-US', {
+      weekday: 'short', month: 'short', day: 'numeric'
+    });
+    const pills = [
+      { val: e.warmup,   dim: false },
+      { val: e.push,     dim: false },
+      { val: e.pull,     dim: false },
+      { val: e.legs,     dim: false },
+      { val: e.core,     dim: false },
+      { val: e.cooldown, dim: true  }
+    ].filter(function(p) { return p.val; })
+     .map(function(p) { return '<span class="wo-pill' + (p.dim ? ' dim' : '') + '">' + p.val + '</span>'; })
+     .join('');
+    return '<div class="wo-history-item">' +
+      '<div style="font-size:13px;font-weight:600;color:#6e6e73;margin-bottom:6px;">' + dateStr + '</div>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:4px;' + (e.notes ? 'margin-bottom:5px;' : '') + '">' + pills + '</div>' +
+      (e.notes ? '<div style="font-size:13px;color:#6e6e73;">' + e.notes + '</div>' : '') +
+      '</div>';
+  }).join('');
 }
 </script>
 </body>
