@@ -9,6 +9,7 @@ const MED_SYR_SHEET   = 'MedSyringes';
 const MED_SHOTS_SHEET   = 'MedShots';
 const SHOTS_PER_SYRINGE = 4;
 const WORKOUT_LOG_SHEET = 'WorkoutLog';
+const INBOX_LOG_SHEET   = 'InboxLog';
 
 const _SCRIPT_CACHE = CacheService.getScriptCache();
 const _CFG_TTL = 300; // foods/activities rarely change — 5-minute cache
@@ -31,7 +32,8 @@ const SCHEMA = {
   act_log:   ['timestamp', 'date', 'activity_name', 'value', 'calories_burned'],
   med_syr:   ['syringe_id', 'order_id', 'date_ordered', 'date_expected', 'date_received', 'date_depleted', 'notes'],
   med_shots:   ['timestamp', 'date', 'syringe_id', 'shot_num', 'notes'],
-  workout_log: ['timestamp', 'date', 'warmup', 'push', 'pull', 'legs', 'core', 'cooldown', 'notes']
+  workout_log: ['timestamp', 'date', 'warmup', 'push', 'pull', 'legs', 'core', 'cooldown', 'notes'],
+  inbox_log:   ['timestamp', 'date', 'processed', 'outstanding', 'minutes', 'notes']
 };
 
 // Column data types — used by auditAndFixSheets() and applySheetFormatting().
@@ -44,7 +46,8 @@ const SCHEMA_TYPES = {
   act_log:   { timestamp: 'datetime', date: 'date', activity_name: 'text_required', value: 'any', calories_burned: 'number' },
   med_syr:   { syringe_id: 'number', order_id: 'text_required', date_ordered: 'date', date_expected: 'date', date_received: 'date', date_depleted: 'date', notes: 'text' },
   med_shots:   { timestamp: 'datetime', date: 'date', syringe_id: 'number', shot_num: 'number', notes: 'text' },
-  workout_log: { timestamp: 'datetime', date: 'date', warmup: 'text', push: 'text', pull: 'text', legs: 'text', core: 'text', cooldown: 'text', notes: 'text' }
+  workout_log: { timestamp: 'datetime', date: 'date', warmup: 'text', push: 'text', pull: 'text', legs: 'text', core: 'text', cooldown: 'text', notes: 'text' },
+  inbox_log:   { timestamp: 'datetime', date: 'date', processed: 'number', outstanding: 'number', minutes: 'number_optional', notes: 'text' }
 };
 
 // Date display formats — applied to 'date' and 'datetime' columns in all sheets.
@@ -63,6 +66,7 @@ const AL = _mkCols(SCHEMA.act_log);   // AL.timestamp, AL.date, AL.activity_name
 const MS = _mkCols(SCHEMA.med_syr);   // MS.syringe_id, MS.order_id, MS.date_received, …
 const MH = _mkCols(SCHEMA.med_shots);    // MH.timestamp, MH.date, MH.syringe_id, …
 const WL = _mkCols(SCHEMA.workout_log); // WL.timestamp, WL.date, WL.warmup, …
+const IL = _mkCols(SCHEMA.inbox_log);   // IL.timestamp, IL.date, IL.processed, …
 
 // SCHEMA_MAP ties sheet constants to their schema/types for iteration.
 // Used by validateSheets(), formatAllSheets(), and auditAndFixSheets().
@@ -74,7 +78,8 @@ const SCHEMA_MAP = [
   { name: ACT_LOG_SHEET,   key: 'act_log'   },
   { name: MED_SYR_SHEET,   key: 'med_syr'   },
   { name: MED_SHOTS_SHEET,   key: 'med_shots'   },
-  { name: WORKOUT_LOG_SHEET, key: 'workout_log' }
+  { name: WORKOUT_LOG_SHEET, key: 'workout_log' },
+  { name: INBOX_LOG_SHEET,   key: 'inbox_log'   }
 ];
 
 function doGet() {
@@ -183,6 +188,7 @@ function initFitness() {
   ensure(ACT_SHEET,       'act');
   ensure(ACT_LOG_SHEET,   'act_log');
   ensure(WORKOUT_LOG_SHEET, 'workout_log');
+  ensure(INBOX_LOG_SHEET,   'inbox_log');
 
   return 'Fitness Tracker initialized. Spreadsheet: ' + ss.getUrl();
 }
@@ -1471,6 +1477,49 @@ function getWorkoutLog(days) {
       core:      String(r[WL.core]     || ''),
       cooldown:  String(r[WL.cooldown] || ''),
       notes:     String(r[WL.notes]    || '')
+    }))
+    .sort((a, b) => b.date.localeCompare(a.date));
+}
+
+// ── Inbox triage log ─────────────────────────────────────────────────────────
+
+// Run from the Apps Script editor to create the InboxLog sheet (safe to re-run).
+function initInbox() {
+  const ss = _ss();
+  let sh = ss.getSheetByName(INBOX_LOG_SHEET);
+  if (!sh) sh = ss.insertSheet(INBOX_LOG_SHEET);
+  if (sh.getLastRow() === 0) sh.appendRow(SCHEMA.inbox_log);
+  applySheetFormatting(sh, 'inbox_log');
+}
+
+function logInboxSession(date, data) {
+  const d = date || _today();
+  _sheet(INBOX_LOG_SHEET).appendRow([
+    _ts(),
+    d,
+    Number(data.processed  || 0),
+    Number(data.outstanding || 0),
+    data.minutes ? Number(data.minutes) : '',
+    String(data.notes || '')
+  ]);
+}
+
+function getInboxLog(days) {
+  days = parseInt(days) || 30;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  const sh = _sheet(INBOX_LOG_SHEET);
+  if (!sh || sh.getLastRow() < 2) return [];
+  const rows = sh.getRange(2, 1, sh.getLastRow() - 1, SCHEMA.inbox_log.length).getValues();
+  return rows
+    .filter(r => r[IL.timestamp] && new Date(_dateStr(r[IL.date]) + 'T12:00:00') >= cutoff)
+    .map(r => ({
+      timestamp:   _tsStr(r[IL.timestamp]),
+      date:        _dateStr(r[IL.date]),
+      processed:   Number(r[IL.processed]   || 0),
+      outstanding: Number(r[IL.outstanding] || 0),
+      minutes:     r[IL.minutes] !== '' ? Number(r[IL.minutes]) : null,
+      notes:       String(r[IL.notes] || '')
     }))
     .sort((a, b) => b.date.localeCompare(a.date));
 }

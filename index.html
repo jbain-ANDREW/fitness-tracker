@@ -175,6 +175,7 @@
   <div class="tab active" onclick="showTab('log', this)">📋 Log</div>
   <div class="tab" onclick="showTab('history', this)">📅 History</div>
   <div class="tab" onclick="showTab('workout', this)">🏋️ Workout</div>
+  <div class="tab" onclick="showTab('inbox', this)">📬 Inbox</div>
   <div class="tab" onclick="showTab('configure', this)">⚙️ Config</div>
   <div class="tab" onclick="showTab('meds', this)">💊 Meds</div>
 </div>
@@ -548,6 +549,49 @@
 
 </div>
 
+<!-- ══ INBOX ═════════════════════════════════════════════════════════════════ -->
+<div id="pane-inbox" class="pane">
+
+  <div class="card" style="margin-bottom:12px;">
+    <label>Session Date</label>
+    <div id="inbox-day-display" style="font-size:20px;font-weight:600;color:#1c1c1e;margin-bottom:8px;"></div>
+    <input type="date" id="inbox-date" onchange="updateInboxDayDisplay()">
+  </div>
+
+  <div class="card">
+    <div class="section-title" style="margin-bottom:12px;">Email Triage Session</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div>
+        <label>Emails processed</label>
+        <input type="number" id="inbox-processed" min="0" placeholder="0"
+               style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:16px;">
+      </div>
+      <div>
+        <label>Inbox outstanding</label>
+        <input type="number" id="inbox-outstanding" min="0" placeholder="0"
+               style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:16px;">
+      </div>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label>Time spent (minutes, optional)</label>
+      <input type="number" id="inbox-minutes" min="0" placeholder="e.g. 20"
+             style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:16px;">
+    </div>
+    <div>
+      <label>Notes (optional)</label>
+      <textarea id="inbox-notes" placeholder="Any observations about the session…"></textarea>
+    </div>
+  </div>
+
+  <button class="primary" onclick="doLogInbox()">Log Session</button>
+
+  <div class="card" style="margin-top:16px;">
+    <div class="section-title">Recent Sessions</div>
+    <div id="inbox-history"><div class="empty">Loading…</div></div>
+  </div>
+
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -598,6 +642,7 @@ function showTab(name, el) {
   }
   if (name === 'meds')    loadMeds();
   if (name === 'workout') loadWorkout();
+  if (name === 'inbox')   loadInbox();
 }
 
 function showConfigTab(name, el) {
@@ -1918,6 +1963,81 @@ function renderWorkoutHistory(entries) {
       (e.notes ? '<div style="font-size:13px;color:#6e6e73;">' + e.notes + '</div>' : '') +
       '</div>';
   }).join('');
+}
+
+// ── Inbox triage log ──────────────────────────────────────────────────────────
+
+function updateInboxDayDisplay() {
+  const d = document.getElementById('inbox-date').value;
+  const el = document.getElementById('inbox-day-display');
+  if (el) el.textContent = new Date(d + 'T12:00:00').toLocaleDateString('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric'
+  });
+}
+
+function loadInbox() {
+  const dateEl = document.getElementById('inbox-date');
+  if (!dateEl.value) { dateEl.value = TODAY; updateInboxDayDisplay(); }
+  google.script.run
+    .withSuccessHandler(function(entries) { renderInboxHistory(entries); })
+    .withFailureHandler(function(e) {
+      document.getElementById('inbox-history').innerHTML = '<div class="empty" style="color:#c00;">' + e.message + '</div>';
+    })
+    .getInboxLog(60);
+}
+
+function doLogInbox() {
+  const processed    = parseInt(document.getElementById('inbox-processed').value) || 0;
+  const outstanding  = parseInt(document.getElementById('inbox-outstanding').value) || 0;
+  const minutesRaw   = document.getElementById('inbox-minutes').value.trim();
+  const minutes      = minutesRaw ? parseInt(minutesRaw) : null;
+  const notes        = document.getElementById('inbox-notes').value.trim();
+  const date         = document.getElementById('inbox-date').value || TODAY;
+
+  const btn = document.querySelector('#pane-inbox .primary');
+  btn.disabled = true; btn.textContent = 'Logging…';
+
+  google.script.run
+    .withSuccessHandler(function() {
+      btn.disabled = false; btn.textContent = 'Log Session';
+      document.getElementById('inbox-processed').value  = '';
+      document.getElementById('inbox-outstanding').value = '';
+      document.getElementById('inbox-minutes').value    = '';
+      document.getElementById('inbox-notes').value      = '';
+      showToast('Session logged');
+      loadInbox();
+    })
+    .withFailureHandler(function(e) {
+      btn.disabled = false; btn.textContent = 'Log Session';
+      showToast('Error: ' + e.message, true);
+    })
+    .logInboxSession(date, { processed, outstanding, minutes, notes });
+}
+
+function renderInboxHistory(entries) {
+  const el = document.getElementById('inbox-history');
+  if (!entries || !entries.length) { el.innerHTML = '<div class="empty">No sessions yet.</div>'; return; }
+  el.innerHTML = '<table style="width:100%;border-collapse:collapse;">' +
+    '<thead><tr style="font-size:11px;color:#999;border-bottom:1px solid #eee;">' +
+    '<th style="text-align:left;padding:4px 6px;">Date</th>' +
+    '<th style="text-align:right;padding:4px 6px;">Processed</th>' +
+    '<th style="text-align:right;padding:4px 6px;">Outstanding</th>' +
+    '<th style="text-align:right;padding:4px 6px;">Minutes</th>' +
+    '<th style="text-align:left;padding:4px 6px;">Notes</th>' +
+    '</tr></thead><tbody>' +
+    entries.slice(0, 30).map(function(e) {
+      const dateStr = new Date(e.date + 'T12:00:00').toLocaleDateString('en-US', {
+        weekday: 'short', month: 'short', day: 'numeric'
+      });
+      return '<tr style="border-bottom:1px solid #f5f5f7;">' +
+        '<td style="padding:6px;font-size:13px;">' + dateStr + '</td>' +
+        '<td style="padding:6px;text-align:right;font-size:14px;font-weight:600;color:#1a6e35;">' + e.processed + '</td>' +
+        '<td style="padding:6px;text-align:right;font-size:14px;' + (e.outstanding > 20 ? 'color:#b45309;font-weight:600;' : 'color:#555;') + '">' + e.outstanding + '</td>' +
+        '<td style="padding:6px;text-align:right;font-size:13px;color:#888;">' + (e.minutes != null ? e.minutes + ' min' : '—') + '</td>' +
+        '<td style="padding:6px;font-size:12px;color:#888;">' + (e.notes || '') + '</td>' +
+        '</tr>';
+    }).join('') +
+    '</tbody></table>';
 }
 </script>
 </body>
