@@ -1851,12 +1851,31 @@ function medSaveOrder() {
 
 const WORKOUT_MENU = [
   { key: 'warmup',   label: 'Warmup · 15 min', options: ['Recumbent bike', 'Treadmill', 'Elliptical'] },
-  { key: 'push',     label: 'Push',             options: ['Dumbbell chest press', 'Incline push-up', 'Wall push-up'] },
-  { key: 'pull',     label: 'Pull',             options: ['One-arm dumbbell row', 'TRX row', 'Band row'] },
-  { key: 'legs',     label: 'Legs',             options: ['Goblet squat', 'Supported squat', 'Leg press', 'Step-ups', 'Sit-to-stand'] },
-  { key: 'core',     label: 'Core',             options: ['Bird dog', 'Dead bug', 'Modified plank', 'Side plank'] },
+  { key: 'push',     label: 'Push',             options: ['Dumbbell chest press', 'Incline push-up', 'Wall push-up'], strength: true },
+  { key: 'pull',     label: 'Pull',             options: ['One-arm dumbbell row', 'TRX row', 'Band row'], strength: true },
+  { key: 'legs',     label: 'Legs',             options: ['Goblet squat', 'Supported squat', 'Leg press', 'Step-ups', 'Sit-to-stand'], strength: true },
+  { key: 'core',     label: 'Core',             options: ['Bird dog', 'Dead bug', 'Modified plank', 'Side plank'], strength: true },
   { key: 'cooldown', label: 'Cool-down',        options: ['Recumbent bike', 'Treadmill', 'Elliptical'], optional: true }
 ];
+
+// Radio groups here are deselectable: clicking an already-selected option clears it
+// back to "nothing chosen" instead of just letting you swap to a different option.
+const WO_RADIO_ATTRS =
+  'onmousedown="this.dataset.wasChecked = this.checked ? \'1\' : \'0\';" ' +
+  'ontouchstart="this.dataset.wasChecked = this.checked ? \'1\' : \'0\';" ' +
+  'onclick="if (this.dataset.wasChecked === \'1\') this.checked = false;"';
+
+// Formats sets/reps/weight into a suffix appended to the chosen exercise name,
+// e.g. "Dumbbell chest press (2x10 @ 20lb)". Blank inputs are simply omitted --
+// no combination of the three fields is required.
+function _woSuffix(sets, reps, weight) {
+  const parts = [];
+  if (sets && reps) parts.push(sets + 'x' + reps);
+  else if (sets)    parts.push(sets + ' sets');
+  else if (reps)    parts.push(reps + ' reps');
+  if (weight) parts.push('@ ' + weight + 'lb');
+  return parts.length ? ' (' + parts.join(' ') + ')' : '';
+}
 
 function loadWorkout() {
   const dateEl = document.getElementById('workout-date');
@@ -1885,19 +1904,27 @@ function renderWorkoutMenu() {
     const opts = section.options.map((opt, i) => {
       const id = 'wo-' + section.key + '-' + i;
       return `<div class="wo-opt">
-        <input type="radio" name="wo-${section.key}" id="${id}" value="${opt}">
+        <input type="radio" name="wo-${section.key}" id="${id}" value="${opt}" ${WO_RADIO_ATTRS}>
         <label for="${id}">${opt}</label>
       </div>`;
     }).join('');
     const skipOpt = section.optional
       ? `<div class="wo-opt">
-           <input type="radio" name="wo-${section.key}" id="wo-${section.key}-skip" value="">
+           <input type="radio" name="wo-${section.key}" id="wo-${section.key}-skip" value="" ${WO_RADIO_ATTRS}>
            <label for="wo-${section.key}-skip" style="color:#8e8e93;">Skip</label>
+         </div>`
+      : '';
+    const strengthRow = section.strength
+      ? `<div class="row" style="margin-top:10px;margin-bottom:0;">
+           <div class="col" style="flex:0 0 62px;"><label>Sets</label><input type="number" id="wo-${section.key}-sets" value="2" min="1" style="text-align:center;"></div>
+           <div class="col" style="flex:0 0 62px;"><label>Reps</label><input type="number" id="wo-${section.key}-reps" min="1" style="text-align:center;"></div>
+           <div class="col"><label>Weight (lb)</label><input type="number" id="wo-${section.key}-weight" min="0" step="2.5"></div>
          </div>`
       : '';
     return `<div class="card">
       <div class="wo-label">${section.label}${hint}</div>
       <div class="wo-opts">${opts}${skipOpt}</div>
+      ${strengthRow}
     </div>`;
   }).join('');
 }
@@ -1909,7 +1936,14 @@ function doLogWorkout() {
   const data = {};
   WORKOUT_MENU.forEach(function(section) {
     const checked = document.querySelector('input[name="wo-' + section.key + '"]:checked');
-    data[section.key] = checked ? checked.value : '';
+    let val = checked ? checked.value : '';
+    if (val && section.strength) {
+      const sets   = document.getElementById('wo-' + section.key + '-sets').value.trim();
+      const reps   = document.getElementById('wo-' + section.key + '-reps').value.trim();
+      const weight = document.getElementById('wo-' + section.key + '-weight').value.trim();
+      val += _woSuffix(sets, reps, weight);
+    }
+    data[section.key] = val;
   });
   data.notes = document.getElementById('workout-notes').value.trim();
 
@@ -1928,6 +1962,11 @@ function doLogWorkout() {
       WORKOUT_MENU.forEach(function(s) {
         const chk = document.querySelector('input[name="wo-' + s.key + '"]:checked');
         if (chk) chk.checked = false;
+        if (s.strength) {
+          document.getElementById('wo-' + s.key + '-sets').value = '2';
+          document.getElementById('wo-' + s.key + '-reps').value = '';
+          document.getElementById('wo-' + s.key + '-weight').value = '';
+        }
       });
       document.getElementById('workout-notes').value = '';
       btn.disabled = false; btn.textContent = 'Log Workout';
