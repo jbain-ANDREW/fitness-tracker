@@ -22,3 +22,4 @@ COMPLETED
 - Link to source Google Sheet in app header ✅
 - Calorie history chart: dual bars per day (orange food, green/red net), inter-day spacing, computed goal line ✅
 - Meal section dividers: slightly grey for visibility ✅
+- Workout: each pick (exercise, sets/reps/weight, notes) saves immediately instead of one final submit; menu rehydrates from saved state on load/date switch so a mid-session app-switch on phone doesn't lose progress; "Log Workout" button removed ✅

@@ -1432,6 +1432,14 @@ function getMedHistory(days) {
 // Stores one row per LA Fitness session: which exercise was chosen from each
 // category (warmup / push / pull / legs / core / cooldown) plus optional notes.
 // Not linked to calorie accounting — that connection can be added later.
+//
+// A session's row is upserted field-by-field (updateWorkoutField), not written
+// once at the end — a workout takes 30-60 min and the page can get killed by
+// the phone backgrounding the browser mid-session, so every pick needs to be
+// durable the moment it's made, the same way logWeight upserts a day's row
+// instead of requiring one final submit.
+
+const WORKOUT_FIELDS = ['warmup', 'push', 'pull', 'legs', 'core', 'cooldown', 'notes'];
 
 // Run from the Apps Script editor to create the WorkoutLog sheet (safe to re-run).
 function initWorkout() {
@@ -1443,19 +1451,69 @@ function initWorkout() {
   return 'WorkoutLog sheet ready.';
 }
 
-function logWorkout(date, data) {
+// 1-indexed sheet row for `date`'s WorkoutLog entry, or -1 if none exists yet.
+function _findWorkoutRow(sheet, date) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return -1;
+  const dates = sheet.getRange(2, WL.date + 1, lastRow - 1, 1).getValues();
+  for (let i = 0; i < dates.length; i++) {
+    if (_dateStr(dates[i][0]) === date) return i + 2;
+  }
+  return -1;
+}
+
+function updateWorkoutField(date, field, value) {
+  if (WORKOUT_FIELDS.indexOf(field) === -1) {
+    throw new Error('Unknown workout field: ' + field);
+  }
   const d = date || _today();
-  _sheet(WORKOUT_LOG_SHEET).appendRow([
-    _ts(), d,
-    data.warmup   || '',
-    data.push     || '',
-    data.pull     || '',
-    data.legs     || '',
-    data.core     || '',
-    data.cooldown || '',
-    data.notes    || ''
-  ]);
-  return getWorkoutLog(30);
+
+  // Quick picks during a session can fire several updateWorkoutField calls
+  // close together; without a lock, two concurrent "no row yet" reads could
+  // each append their own row for the same date. LockService serializes the
+  // find-or-create so that can't happen.
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const sheet = _sheet(WORKOUT_LOG_SHEET);
+    const row = _findWorkoutRow(sheet, d);
+
+    if (row === -1) {
+      const blank = SCHEMA.workout_log.map(function() { return ''; });
+      blank[WL.timestamp] = _ts();
+      blank[WL.date] = d;
+      blank[WL[field]] = value;
+      sheet.appendRow(blank);
+    } else {
+      sheet.getRange(row, WL[field] + 1).setValue(value);
+      sheet.getRange(row, WL.timestamp + 1).setValue(_ts());
+    }
+  } finally {
+    lock.releaseLock();
+  }
+  return getWorkoutEntry(d);
+}
+
+// Current saved state for one day, or null if nothing logged yet — used both
+// as updateWorkoutField's return value and to rehydrate the menu on load/date
+// switch, so a reload mid-session shows what's already saved instead of blank.
+function getWorkoutEntry(date) {
+  const d = date || _today();
+  const sheet = _sheet(WORKOUT_LOG_SHEET);
+  const row = _findWorkoutRow(sheet, d);
+  if (row === -1) return null;
+  const r = sheet.getRange(row, 1, 1, SCHEMA.workout_log.length).getValues()[0];
+  return {
+    timestamp: _tsStr(r[WL.timestamp]),
+    date:      _dateStr(r[WL.date]),
+    warmup:    String(r[WL.warmup]   || ''),
+    push:      String(r[WL.push]     || ''),
+    pull:      String(r[WL.pull]     || ''),
+    legs:      String(r[WL.legs]     || ''),
+    core:      String(r[WL.core]     || ''),
+    cooldown:  String(r[WL.cooldown] || ''),
+    notes:     String(r[WL.notes]    || '')
+  };
 }
 
 function getWorkoutLog(days) {

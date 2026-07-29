@@ -532,15 +532,16 @@
     <input type="date" id="workout-date" onchange="updateWorkoutDayDisplay()">
   </div>
 
-  <!-- Exercise checklist — rendered by renderWorkoutMenu() -->
+  <!-- Exercise checklist — rendered by renderWorkoutMenu(). Each pick saves
+       immediately (updateWorkoutField); there's no separate submit step. -->
   <div id="workout-menu"></div>
 
   <div class="card">
     <label>Notes (optional)</label>
-    <textarea id="workout-notes" placeholder="How did it go? Any modifications?"></textarea>
+    <textarea id="workout-notes" placeholder="How did it go? Any modifications?" onblur="saveWorkoutNotes()"></textarea>
   </div>
 
-  <button class="primary" onclick="doLogWorkout()">Log Workout</button>
+  <div id="workout-save-status" style="text-align:center;font-size:13px;color:#8e8e93;margin:4px 0 12px;">&nbsp;</div>
 
   <div class="card" style="margin-top:16px;">
     <div class="section-title">Recent Sessions</div>
@@ -1860,10 +1861,14 @@ const WORKOUT_MENU = [
 
 // Radio groups here are deselectable: clicking an already-selected option clears it
 // back to "nothing chosen" instead of just letting you swap to a different option.
-const WO_RADIO_ATTRS =
-  'onmousedown="this.dataset.wasChecked = this.checked ? \'1\' : \'0\';" ' +
-  'ontouchstart="this.dataset.wasChecked = this.checked ? \'1\' : \'0\';" ' +
-  'onclick="if (this.dataset.wasChecked === \'1\') this.checked = false;"';
+// Every click also saves the section immediately -- setting .checked via script
+// (the deselect case) doesn't fire a native 'change' event, so the save call has
+// to live in onclick, not onchange, to catch both selecting and deselecting.
+function _woRadioAttrs(key) {
+  return 'onmousedown="this.dataset.wasChecked = this.checked ? \'1\' : \'0\';" ' +
+    'ontouchstart="this.dataset.wasChecked = this.checked ? \'1\' : \'0\';" ' +
+    'onclick="if (this.dataset.wasChecked === \'1\') this.checked = false; saveWorkoutField(\'' + key + '\');"';
+}
 
 // Formats sets/reps/weight into a suffix appended to the chosen exercise name,
 // e.g. "Dumbbell chest press (2x10 @ 20lb)". Blank inputs are simply omitted --
@@ -1877,10 +1882,30 @@ function _woSuffix(sets, reps, weight) {
   return parts.length ? ' (' + parts.join(' ') + ')' : '';
 }
 
+// Reverse of _woSuffix() -- splits a saved "Exercise Name (2x10 @ 20lb)" string
+// back into { name, sets, reps, weight } so the menu can be rehydrated from
+// whatever's already saved (page reload mid-session, or switching dates).
+function _parseWoValue(saved) {
+  if (!saved) return { name: '', sets: '', reps: '', weight: '' };
+  const m = saved.match(/^(.*?)(?: \(([^)]*)\))?$/);
+  const name = m[1];
+  const suffix = m[2] || '';
+  let sets = '', reps = '', weight = '';
+  const setsReps = suffix.match(/(\d+)x(\d+)/);
+  const setsOnly = suffix.match(/^(\d+) sets$/);
+  const repsOnly = suffix.match(/^(\d+) reps$/);
+  const weightM  = suffix.match(/@ ([\d.]+)lb/);
+  if (setsReps)      { sets = setsReps[1]; reps = setsReps[2]; }
+  else if (setsOnly) { sets = setsOnly[1]; }
+  else if (repsOnly) { reps = repsOnly[1]; }
+  if (weightM) weight = weightM[1];
+  return { name, sets, reps, weight };
+}
+
 function loadWorkout() {
   const dateEl = document.getElementById('workout-date');
-  if (dateEl && !dateEl.value) { dateEl.value = TODAY; updateWorkoutDayDisplay(); }
-  renderWorkoutMenu();
+  if (dateEl && !dateEl.value) { dateEl.value = TODAY; }
+  updateWorkoutDayDisplay();
   google.script.run
     .withSuccessHandler(entries => renderWorkoutHistory(entries))
     .withFailureHandler(e => toast('Workout error: ' + e.message))
@@ -1894,31 +1919,44 @@ function updateWorkoutDayDisplay() {
   el.textContent = new Date(d + 'T12:00:00').toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric'
   });
+  loadWorkoutEntryForDate(d);
 }
 
-function renderWorkoutMenu() {
+// Fetch whatever's already saved for `date` and rehydrate the menu/notes to
+// match -- so switching dates, or reloading mid-session, shows real saved
+// state instead of a blank menu.
+function loadWorkoutEntryForDate(date) {
+  google.script.run
+    .withSuccessHandler(entry => renderWorkoutMenu(entry))
+    .withFailureHandler(e => toast('Workout error: ' + e.message))
+    .getWorkoutEntry(date);
+}
+
+function renderWorkoutMenu(entry) {
   document.getElementById('workout-menu').innerHTML = WORKOUT_MENU.map(section => {
+    const parsed = _parseWoValue(entry ? entry[section.key] : '');
     const hint = section.optional
       ? ' <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#8e8e93;font-size:12px;">(optional)</span>'
       : '';
     const opts = section.options.map((opt, i) => {
       const id = 'wo-' + section.key + '-' + i;
+      const checked = parsed.name === opt ? 'checked' : '';
       return `<div class="wo-opt">
-        <input type="radio" name="wo-${section.key}" id="${id}" value="${opt}" ${WO_RADIO_ATTRS}>
+        <input type="radio" name="wo-${section.key}" id="${id}" value="${opt}" ${checked} ${_woRadioAttrs(section.key)}>
         <label for="${id}">${opt}</label>
       </div>`;
     }).join('');
     const skipOpt = section.optional
       ? `<div class="wo-opt">
-           <input type="radio" name="wo-${section.key}" id="wo-${section.key}-skip" value="" ${WO_RADIO_ATTRS}>
+           <input type="radio" name="wo-${section.key}" id="wo-${section.key}-skip" value="" ${_woRadioAttrs(section.key)}>
            <label for="wo-${section.key}-skip" style="color:#8e8e93;">Skip</label>
          </div>`
       : '';
     const strengthRow = section.strength
       ? `<div class="row" style="margin-top:10px;margin-bottom:0;">
-           <div class="col" style="flex:0 0 62px;"><label>Sets</label><input type="number" id="wo-${section.key}-sets" value="2" min="1" style="text-align:center;"></div>
-           <div class="col" style="flex:0 0 62px;"><label>Reps</label><input type="number" id="wo-${section.key}-reps" min="1" style="text-align:center;"></div>
-           <div class="col"><label>Weight (lb)</label><input type="number" id="wo-${section.key}-weight" min="0" step="2.5"></div>
+           <div class="col" style="flex:0 0 62px;"><label>Sets</label><input type="number" id="wo-${section.key}-sets" value="${parsed.sets || '2'}" min="1" style="text-align:center;" onblur="saveWorkoutFieldDebounced('${section.key}')"></div>
+           <div class="col" style="flex:0 0 62px;"><label>Reps</label><input type="number" id="wo-${section.key}-reps" value="${parsed.reps}" min="1" style="text-align:center;" onblur="saveWorkoutFieldDebounced('${section.key}')"></div>
+           <div class="col"><label>Weight (lb)</label><input type="number" id="wo-${section.key}-weight" value="${parsed.weight}" min="0" step="2.5" onblur="saveWorkoutFieldDebounced('${section.key}')"></div>
          </div>`
       : '';
     return `<div class="card">
@@ -1927,56 +1965,69 @@ function renderWorkoutMenu() {
       ${strengthRow}
     </div>`;
   }).join('');
+  document.getElementById('workout-notes').value = entry ? (entry.notes || '') : '';
 }
 
-function doLogWorkout() {
+let _woSaveStatusTimer = null;
+function _showWorkoutSaveStatus(text) {
+  const el = document.getElementById('workout-save-status');
+  if (!el) return;
+  el.textContent = text || ' ';
+  clearTimeout(_woSaveStatusTimer);
+  if (text) _woSaveStatusTimer = setTimeout(function() { el.textContent = ' '; }, 2000);
+}
+
+// Sets/reps/weight are three adjacent inputs users naturally tab through --
+// debounce so tabbing sets->reps->weight collapses into one save instead of
+// three sequential round-trips (each blur would otherwise fire its own).
+// Radio picks skip this and save instantly (see _woRadioAttrs) since those
+// are discrete taps, not a rapid sequence.
+const _woFieldSaveTimers = {};
+function saveWorkoutFieldDebounced(key) {
+  clearTimeout(_woFieldSaveTimers[key]);
+  _woFieldSaveTimers[key] = setTimeout(function() { saveWorkoutField(key); }, 500);
+}
+
+// Saves one category's current pick (plus sets/reps/weight, if any) the moment
+// it changes -- no separate submit button. Fired from the radio's onclick and
+// (debounced) from the sets/reps/weight inputs' onblur.
+function saveWorkoutField(key) {
+  const section = WORKOUT_MENU.find(function(s) { return s.key === key; });
   const date = document.getElementById('workout-date').value;
-  if (!date) { toast('Pick a date'); return; }
+  if (!date || !section) return;
 
-  const data = {};
-  WORKOUT_MENU.forEach(function(section) {
-    const checked = document.querySelector('input[name="wo-' + section.key + '"]:checked');
-    let val = checked ? checked.value : '';
-    if (val && section.strength) {
-      const sets   = document.getElementById('wo-' + section.key + '-sets').value.trim();
-      const reps   = document.getElementById('wo-' + section.key + '-reps').value.trim();
-      const weight = document.getElementById('wo-' + section.key + '-weight').value.trim();
-      val += _woSuffix(sets, reps, weight);
-    }
-    data[section.key] = val;
-  });
-  data.notes = document.getElementById('workout-notes').value.trim();
-
-  const missing = WORKOUT_MENU.filter(s => !s.optional && !data[s.key]);
-  if (missing.length) {
-    toast('Pick an exercise for: ' + missing.map(s => s.label).join(', '));
-    return;
+  const checked = document.querySelector('input[name="wo-' + key + '"]:checked');
+  let val = checked ? checked.value : '';
+  if (val && section.strength) {
+    const sets   = document.getElementById('wo-' + key + '-sets').value.trim();
+    const reps   = document.getElementById('wo-' + key + '-reps').value.trim();
+    const weight = document.getElementById('wo-' + key + '-weight').value.trim();
+    val += _woSuffix(sets, reps, weight);
   }
 
-  const btn = document.querySelector('#pane-workout .primary');
-  btn.disabled = true; btn.textContent = 'Logging…';
-
+  _showWorkoutSaveStatus('Saving…');
   google.script.run
-    .withSuccessHandler(function(entries) {
-      renderWorkoutHistory(entries);
-      WORKOUT_MENU.forEach(function(s) {
-        const chk = document.querySelector('input[name="wo-' + s.key + '"]:checked');
-        if (chk) chk.checked = false;
-        if (s.strength) {
-          document.getElementById('wo-' + s.key + '-sets').value = '2';
-          document.getElementById('wo-' + s.key + '-reps').value = '';
-          document.getElementById('wo-' + s.key + '-weight').value = '';
-        }
-      });
-      document.getElementById('workout-notes').value = '';
-      btn.disabled = false; btn.textContent = 'Log Workout';
-      toast('Workout logged ✓');
-    })
+    .withSuccessHandler(function() { _showWorkoutSaveStatus('Saved ✓'); })
     .withFailureHandler(function(e) {
       toast('Error: ' + e.message);
-      btn.disabled = false; btn.textContent = 'Log Workout';
+      _showWorkoutSaveStatus('');
     })
-    .logWorkout(date, data);
+    .updateWorkoutField(date, key, val);
+}
+
+function saveWorkoutNotes() {
+  const date = document.getElementById('workout-date').value;
+  if (!date) return;
+  const notes = document.getElementById('workout-notes').value.trim();
+
+  _showWorkoutSaveStatus('Saving…');
+  google.script.run
+    .withSuccessHandler(function() { _showWorkoutSaveStatus('Saved ✓'); })
+    .withFailureHandler(function(e) {
+      toast('Error: ' + e.message);
+      _showWorkoutSaveStatus('');
+    })
+    .updateWorkoutField(date, 'notes', notes);
 }
 
 function renderWorkoutHistory(entries) {
