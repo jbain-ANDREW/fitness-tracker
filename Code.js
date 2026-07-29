@@ -11,9 +11,6 @@ const SHOTS_PER_SYRINGE = 4;
 const WORKOUT_LOG_SHEET = 'WorkoutLog';
 const INBOX_LOG_SHEET   = 'InboxLog';
 
-const _SCRIPT_CACHE = CacheService.getScriptCache();
-const _CFG_TTL = 300; // foods/activities rarely change — 5-minute cache
-
 // ── Sheet schemas — single source of truth ────────────────────────────────────
 // Column order defined here drives: initFitness/initMeds header rows,
 // all read/write index lookups, and validateSheets() header checks.
@@ -203,36 +200,54 @@ function initFitness() {
 // (logWeight's gap-fill, getWeightHistory, drawCalStats in index.html) were
 // lost from a later edit that was never captured in a git commit.
 
-// Internal: compute and write daily stats given pre-read food/activity rows.
-// Reads and rewrites the Weight sheet; fRows/aRows must be data rows only (no header).
-function _computeDailyStatsCore(wSheet, fRows, aRows) {
+function computeDailyStats() {
+  const ss     = _ss();
+  const wSheet = ss.getSheetByName(WEIGHT_SHEET);
+  const fSheet = ss.getSheetByName(FOOD_LOG_SHEET);
+  const aSheet = ss.getSheetByName(ACT_LOG_SHEET);
+
+  // Always write the canonical header row (handles prior 'timestamp' label and col count).
   wSheet.getRange(1, 1, 1, SCHEMA.weight.length).setValues([SCHEMA.weight]);
 
   const wLastRow = wSheet.getLastRow();
   if (wLastRow < 2) return [];
 
+  // Read all weight data rows (C/D/F/G may be blank on first run).
   const wCols = Math.max(wSheet.getLastColumn(), SCHEMA.weight.length);
-  const wData = wSheet.getRange(2, 1, wLastRow - 1, wCols).getValues();
+  const wRows = wSheet.getRange(2, 1, wLastRow - 1, wCols).getValues();
 
+  // Sum food calories per date from FoodLog.
   const foodTotals = {};
-  (fRows || []).forEach(r => {
-    const d = _dateStr(r[FL.date]);
-    if (d) foodTotals[d] = (foodTotals[d] || 0) + (parseFloat(r[FL.calories_total]) || 0);
-  });
+  if (fSheet && fSheet.getLastRow() > 1) {
+    fSheet.getRange(2, 1, fSheet.getLastRow() - 1, SCHEMA.food_log.length).getValues().forEach(r => {
+      const d = _dateStr(r[FL.date]);
+      if (d) foodTotals[d] = (foodTotals[d] || 0) + (parseFloat(r[FL.calories_total]) || 0);
+    });
+  }
 
+  // Sum calories burned per date from ActivityLog.
   const actTotals = {};
-  (aRows || []).forEach(r => {
-    const d = _dateStr(r[AL.date]);
-    if (d) actTotals[d] = (actTotals[d] || 0) + (parseFloat(r[AL.calories_burned]) || 0);
-  });
+  if (aSheet && aSheet.getLastRow() > 1) {
+    aSheet.getRange(2, 1, aSheet.getLastRow() - 1, SCHEMA.act_log.length).getValues().forEach(r => {
+      const d = _dateStr(r[AL.date]);
+      if (d) actTotals[d] = (actTotals[d] || 0) + (parseFloat(r[AL.calories_burned]) || 0);
+    });
+  }
 
-  const valid = wData
+  // Build a sorted list of rows that have valid weight entries.
+  const valid = wRows
     .map((r, i) => ({ i, date: _dateStr(r[W.date]), weight: parseFloat(r[W.weight_lbs]) || 0 }))
     .filter(r => r.date && r.weight)
     .sort((a, b) => a.date.localeCompare(b.date));
 
+  // Load BMR settings once -- needed to compute per-row TDEE.
   const bmr = getBMRSettings();
 
+  // Compute all derived columns for each valid row.
+  // net_calories   = food - activity_burn; blank when no food logged.
+  // delta_weight   = today - yesterday (negative = lost); blank for first entry (no prior day).
+  // food_calories  = raw food intake; blank when no food logged.
+  // cal_deficit    = TDEE - net_calories (positive = deficit; negative = surplus).
   const computed = {};
   valid.forEach((row, idx) => {
     const food  = foodTotals[row.date] || 0;
@@ -244,7 +259,8 @@ function _computeDailyStatsCore(wSheet, fRows, aRows) {
     computed[row.i] = { net, delta, food: food > 0 ? Math.round(food) : '', def };
   });
 
-  const writeAll = wData.map((r, i) => [
+  // Write computed cols in one operation; interpolated is read from wRows to preserve it.
+  const writeAll = wRows.map((r, i) => [
     computed[i] ? computed[i].net   : '',
     computed[i] ? computed[i].delta : '',
     r[W.interpolated],
@@ -253,25 +269,15 @@ function _computeDailyStatsCore(wSheet, fRows, aRows) {
   ]);
   wSheet.getRange(2, W.net_calories + 1, writeAll.length, SCHEMA.weight.length - W.net_calories).setValues(writeAll);
 
+  // Return enriched list for immediate use by getHistoryPage.
   return valid.map(row => ({
     date:          row.date,
     weight:        Math.round(row.weight * 10) / 10,
-    net_calories:  computed[row.i].net   !== '' ? computed[row.i].net   : null,
+    net_calories:  computed[row.i].net  !== '' ? computed[row.i].net  : null,
     delta_weight:  computed[row.i].delta !== '' ? computed[row.i].delta : null,
-    food_calories: computed[row.i].food  !== '' ? computed[row.i].food  : null,
-    cal_deficit:   computed[row.i].def   !== '' ? computed[row.i].def   : null
+    food_calories: computed[row.i].food !== '' ? computed[row.i].food : null,
+    cal_deficit:   computed[row.i].def  !== '' ? computed[row.i].def  : null
   }));
-}
-
-function computeDailyStats() {
-  const ss     = _ss();
-  const fSheet = ss.getSheetByName(FOOD_LOG_SHEET);
-  const aSheet = ss.getSheetByName(ACT_LOG_SHEET);
-  const fRows  = (fSheet && fSheet.getLastRow() > 1)
-    ? fSheet.getRange(2, 1, fSheet.getLastRow() - 1, SCHEMA.food_log.length).getValues() : [];
-  const aRows  = (aSheet && aSheet.getLastRow() > 1)
-    ? aSheet.getRange(2, 1, aSheet.getLastRow() - 1, SCHEMA.act_log.length).getValues() : [];
-  return _computeDailyStatsCore(ss.getSheetByName(WEIGHT_SHEET), fRows, aRows);
 }
 
 // ── Weight — chronological, one entry per day ────────────────────────────────
@@ -395,17 +401,13 @@ function getWeightHistory(days) {
 // (sample real rows), not whether a label matches a JS variable name.
 
 function getFoods() {
-  const hit = _SCRIPT_CACHE.get('foods');
-  if (hit) try { return JSON.parse(hit); } catch(e) {}
   const rows = _sheet(FOODS_SHEET).getDataRange().getValues().slice(1);
   // serving_name/serving_size are legacy JS names: serving_name → F.serving_size col,
   // serving_size → F.serving_note col. See SCHEMA note at top.
-  const data = rows.filter(r => r[F.name]).map(r => ({
+  return rows.filter(r => r[F.name]).map(r => ({
     name: r[F.name], serving_name: r[F.serving_size], serving_size: r[F.serving_note],
     calories_per_serving: parseFloat(r[F.calories_per_serving]) || 0
   }));
-  _SCRIPT_CACHE.put('foods', JSON.stringify(data), _CFG_TTL);
-  return data;
 }
 
 function saveFood(data) {
@@ -416,12 +418,10 @@ function saveFood(data) {
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][F.name] === match) {
       sheet.getRange(i + 1, 1, 1, SCHEMA.foods.length).setValues([row]);
-      _SCRIPT_CACHE.remove('foods');
       return getFoods();
     }
   }
   sheet.appendRow(row);
-  _SCRIPT_CACHE.remove('foods');
   return getFoods();
 }
 
@@ -431,7 +431,6 @@ function deleteFood(name) {
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][F.name] === name) { sheet.deleteRow(i + 1); break; }
   }
-  _SCRIPT_CACHE.remove('foods');
   return getFoods();
 }
 
@@ -483,10 +482,8 @@ function getFoodLog(days) {
 // ── Activities config ─────────────────────────────────────────────────────────
 
 function getActivities() {
-  const hit = _SCRIPT_CACHE.get('activities');
-  if (hit) try { return JSON.parse(hit); } catch(e) {}
   const rows = _sheet(ACT_SHEET).getDataRange().getValues().slice(1);
-  const data = rows.filter(r => r[A.name]).map(r => ({
+  return rows.filter(r => r[A.name]).map(r => ({
     name: r[A.name], type: r[A.type] || 'checkbox', unit: r[A.unit] || '', goal: r[A.goal] || '',
     calories:      parseFloat(r[A.calories])      || 0,
     cal_weight1:   parseFloat(r[A.cal_weight1])   || 0,
@@ -494,8 +491,6 @@ function getActivities() {
     cal_weight2:   parseFloat(r[A.cal_weight2])   || 0,
     cal_per_unit2: parseFloat(r[A.cal_per_unit2]) || 0
   }));
-  _SCRIPT_CACHE.put('activities', JSON.stringify(data), _CFG_TTL);
-  return data;
 }
 
 function saveActivity(data) {
@@ -513,12 +508,10 @@ function saveActivity(data) {
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][A.name] === match) {
       sheet.getRange(i + 1, 1, 1, SCHEMA.act.length).setValues([row]);
-      _SCRIPT_CACHE.remove('activities');
       return getActivities();
     }
   }
   sheet.appendRow(row);
-  _SCRIPT_CACHE.remove('activities');
   return getActivities();
 }
 
@@ -528,7 +521,6 @@ function deleteActivity(name) {
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][A.name] === name) { sheet.deleteRow(i + 1); break; }
   }
-  _SCRIPT_CACHE.remove('activities');
   return getActivities();
 }
 
@@ -884,57 +876,28 @@ function fixActivityHeaders() {
 // ── Combined loaders ──────────────────────────────────────────────────────────
 
 function getDateSummary(date) {
-  const d     = date || _today();
-  // Batch all script properties in one read (avoids separate calls for BMR + goal)
-  const props = PropertiesService.getScriptProperties().getProperties();
-  const bmr = {
-    weight1:     parseFloat(props['BMR_WEIGHT1'])   || 0,
-    tdee1:       parseFloat(props['BMR_TDEE1'])     || 0,
-    weight2:     parseFloat(props['BMR_WEIGHT2'])   || 0,
-    tdee2:       parseFloat(props['BMR_TDEE2'])     || 0,
-    baseSteps:   parseInt(props['BMR_BASE_STEPS'])  || 0,
-    goalLbsWeek: parseFloat(props['GOAL_LBS_WEEK']) || 0
-  };
-  const goal       = parseInt(props['DAILY_CALORIE_GOAL']) || 0;
+  const d          = date || _today();
   const weightData = getDateWeight(d);
+  const bmr        = getBMRSettings();
   const tdee       = (weightData.weight && bmr.weight1 && bmr.weight2)
     ? _computeTDEE(weightData.weight, bmr) : 0;
   const deficit    = Math.round((bmr.goalLbsWeek || 0) * 3500 / 7);
   return {
-    date:              d,
+    date,
     weight:            weightData,
     food:              getDateFood(d),
     activities:        getDateActivities(d),
     foods_config:      getFoods(),
     activities_config: getActivities(),
-    goal,
+    goal:              getGoal(),
     sheet_url:         _ss().getUrl(),
-    bmr,
-    tdee,
-    cal_target:        tdee ? tdee - deficit : goal
+    bmr:               bmr,
+    tdee:              tdee,
+    cal_target:        tdee ? tdee - deficit : getGoal()
   };
 }
 
 function getTodaySummary() { return getDateSummary(_today()); }
-
-// Fast weight-only history: reads 2 columns from the Weight sheet, no computation, no write-back.
-// Used by the History weight chart so it loads without waiting for calorie stats.
-function getWeightHistoryFast(days) {
-  days = parseInt(days) || 90;
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - days);
-  const co  = cutoff.toISOString().slice(0, 10);
-  const sh  = _sheet(WEIGHT_SHEET);
-  const lastRow = sh.getLastRow();
-  if (lastRow < 2) return { weight: [], goal: getGoal() };
-  const rows = sh.getRange(2, 1, lastRow - 1, 2).getValues(); // date + weight only
-  const weight = rows
-    .filter(r => r[0] && parseFloat(r[1]))
-    .map(r => ({ date: _dateStr(r[0]), weight: Math.round(parseFloat(r[1]) * 10) / 10 }))
-    .filter(r => r.date >= co)
-    .sort((a, b) => a.date.localeCompare(b.date));
-  return { weight, goal: getGoal() };
-}
 
 function getHistoryPage(days) {
   days = parseInt(days) || 30;
@@ -942,58 +905,16 @@ function getHistoryPage(days) {
   cutoff.setDate(cutoff.getDate() - days);
   const co = cutoff.toISOString().slice(0, 10);
 
-  const ss     = _ss();
-  const fSheet = ss.getSheetByName(FOOD_LOG_SHEET);
-  const aSheet = ss.getSheetByName(ACT_LOG_SHEET);
-
-  // Read FoodLog and ActivityLog ONCE; reuse for daily stats computation and log building.
-  const fRows = (fSheet && fSheet.getLastRow() > 1)
-    ? fSheet.getRange(2, 1, fSheet.getLastRow() - 1, SCHEMA.food_log.length).getValues() : [];
-  const aRows = (aSheet && aSheet.getLastRow() > 1)
-    ? aSheet.getRange(2, 1, aSheet.getLastRow() - 1, SCHEMA.act_log.length).getValues() : [];
-
-  const weight = _computeDailyStatsCore(ss.getSheetByName(WEIGHT_SHEET), fRows, aRows)
-    .filter(p => p.date >= co);
-
-  // Build food log from already-read fRows (no second sheet read)
-  const food = {};
-  fRows
-    .filter(r => r[FL.date] && new Date(_dateStr(r[FL.date]) + 'T12:00:00') >= cutoff)
-    .forEach(r => {
-      const d = _dateStr(r[FL.date]);
-      if (!food[d]) food[d] = { entries: [], total_calories: 0 };
-      food[d].entries.push({
-        timestamp:    _tsStr(r[FL.timestamp]), food_name: r[FL.food_name],
-        num_servings: parseFloat(r[FL.num_servings]), calories: parseFloat(r[FL.calories_total]),
-        meal:         r[FL.meal] || ''
-      });
-      food[d].total_calories += parseFloat(r[FL.calories_total]) || 0;
-    });
-  Object.values(food).forEach(day => { day.total_calories = Math.round(day.total_calories); });
-
-  // Build activity log from already-read aRows (no second sheet read)
-  const activities = {};
-  aRows
-    .filter(r => {
-      const ts = _tsStr(r[AL.timestamp]);
-      return ts.length > 10 && r[AL.date] && new Date(_dateStr(r[AL.date]) + 'T12:00:00') >= cutoff;
-    })
-    .forEach(r => {
-      const d = _dateStr(r[AL.date]);
-      if (!activities[d]) activities[d] = [];
-      activities[d].push({
-        timestamp:       _tsStr(r[AL.timestamp]),
-        activity_name:   String(r[AL.activity_name]),
-        value:           r[AL.value],
-        calories_burned: parseFloat(r[AL.calories_burned]) || 0
-      });
-    });
+  // computeDailyStats writes the computed cols fresh (from the latest
+  // FoodLog/ActivityLog) and returns the full enriched weight list --
+  // filter to the requested window here instead of re-reading the sheet.
+  const weight = computeDailyStats().filter(p => p.date >= co);
 
   return {
     weight,
-    food,
-    activities,
-    activities_config: getActivities(), // from CacheService after first call
+    food:              getFoodLog(days),
+    activities:        getActivityLog(days),
+    activities_config: getActivities(),
     goal:              getGoal()
   };
 }
