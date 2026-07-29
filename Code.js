@@ -901,14 +901,11 @@ function getTodaySummary() { return getDateSummary(_today()); }
 
 function getHistoryPage(days) {
   days = parseInt(days) || 30;
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - days);
-  const co = cutoff.toISOString().slice(0, 10);
 
-  // computeDailyStats writes the computed cols fresh (from the latest
-  // FoodLog/ActivityLog) and returns the full enriched weight list --
-  // filter to the requested window here instead of re-reading the sheet.
-  const weight = computeDailyStats().filter(p => p.date >= co);
+  // Weight is returned in full ("all time" chart option, 2026-07-29) --
+  // food/activities stay windowed to `days` since those logs could get
+  // large over years and don't need the same long horizon.
+  const weight = computeDailyStats();
 
   return {
     weight,

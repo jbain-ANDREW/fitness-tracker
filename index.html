@@ -283,7 +283,7 @@
             <option value="14">14 days</option>
             <option value="30" selected>30 days</option>
             <option value="60">60 days</option>
-            <option value="90">90 days</option>
+            <option value="all">All time</option>
           </select>
         </div>
         <div class="col"><label>Y min (lbs)</label><input type="number" id="wt-ymin" placeholder="auto" step="0.5" oninput="renderHistWeight()"></div>
@@ -1073,13 +1073,22 @@ function renderHistWeight() {
 
 function drawWeightSvg() {
   if (!S.histData) return '<div class="empty">Loading…</div>';
-  const days   = parseInt(document.getElementById('wt-days').value) || 30;
-  const manMin = parseFloat(document.getElementById('wt-ymin').value);
-  const manMax = parseFloat(document.getElementById('wt-ymax').value);
+  const daysVal = document.getElementById('wt-days').value;
+  const manMin  = parseFloat(document.getElementById('wt-ymin').value);
+  const manMax  = parseFloat(document.getElementById('wt-ymax').value);
 
-  const cutoff = new Date(TODAY + 'T00:00:00');
-  cutoff.setDate(cutoff.getDate() - days);
-  const pts = (S.histData.weight || []).filter(p => new Date(p.date + 'T00:00:00') >= cutoff);
+  // "all" bypasses the cutoff filter entirely -- parseInt("all") is NaN, so
+  // this has to be an explicit branch rather than falling through to the
+  // days-based filter with a default (which would silently show 30 days).
+  let pts;
+  if (daysVal === 'all') {
+    pts = (S.histData.weight || []).slice();
+  } else {
+    const days = parseInt(daysVal) || 30;
+    const cutoff = new Date(TODAY + 'T00:00:00');
+    cutoff.setDate(cutoff.getDate() - days);
+    pts = (S.histData.weight || []).filter(p => new Date(p.date + 'T00:00:00') >= cutoff);
+  }
 
   if (!pts.length) return '<div class="empty">No weight data for this period.</div>';
 
