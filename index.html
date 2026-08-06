@@ -187,6 +187,7 @@
     <label>Logging for</label>
     <div id="log-day-display" style="font-size:20px;font-weight:600;color:#1c1c1e;margin-bottom:8px;"></div>
     <input type="date" id="log-date" onchange="changeLogDate()">
+    <button class="small blue" id="log-load-btn" onclick="loadLogDate(S.logDate)" style="width:100%;margin-top:8px;">Load Data</button>
   </div>
 
   <!-- Weight -->
@@ -267,6 +268,8 @@
 <!-- ══ HISTORY ══════════════════════════════════════════════════════════════ -->
 <div id="pane-history" class="pane">
 
+  <button class="small blue" id="history-load-btn" onclick="loadHistory()" style="width:100%;margin-bottom:12px;">Load History</button>
+
   <div class="tabs" id="hist-tabs" style="margin-bottom:16px;">
     <div class="tab active" onclick="showHistTab('weight', this)">⚖️ Weight</div>
     <div class="tab" onclick="showHistTab('calories', this)">🔥 Calories</div>
@@ -289,7 +292,7 @@
         <div class="col"><label>Y min (lbs)</label><input type="number" id="wt-ymin" placeholder="auto" step="0.5" oninput="renderHistWeight()"></div>
         <div class="col"><label>Y max (lbs)</label><input type="number" id="wt-ymax" placeholder="auto" step="0.5" oninput="renderHistWeight()"></div>
       </div>
-      <div id="wt-chart-wrap"><div class="empty">Loading…</div></div>
+      <div id="wt-chart-wrap"><div class="empty">Tap "Load History" above.</div></div>
     </div>
   </div>
 
@@ -297,19 +300,21 @@
   <div id="hist-calories" style="display:none;">
     <div class="card">
       <div style="font-size:13px;color:#6e6e73;margin-bottom:12px;">Last 7 days + today · <span style="color:#ff9500;">■</span> food &nbsp;·&nbsp; <span style="color:#34c759;">■</span> net (under goal) &nbsp;·&nbsp; <span style="color:#ff3b30;">■</span> net (over goal) &nbsp;·&nbsp; <span style="color:#ff9500;opacity:0.45;">■</span> today (in progress)</div>
-      <div id="cal-chart-wrap"><div class="empty">Loading…</div></div>
+      <div id="cal-chart-wrap"><div class="empty">Tap "Load History" above.</div></div>
     </div>
   </div>
 
   <!-- Activities sub-pane -->
   <div id="hist-activities" style="display:none;">
-    <div id="hist-acts-content"><div class="card"><div class="empty">Loading…</div></div></div>
+    <div id="hist-acts-content"><div class="card"><div class="empty">Tap "Load History" above.</div></div></div>
   </div>
 
 </div>
 
 <!-- ══ CONFIGURE ════════════════════════════════════════════════════════════ -->
 <div id="pane-configure" class="pane">
+
+  <button class="small blue" id="config-load-btn" onclick="loadConfigData()" style="width:100%;margin-bottom:12px;">Load Foods / Activities</button>
 
   <div class="tabs" id="cfg-tabs" style="margin-bottom:16px;">
     <div class="tab active" onclick="showConfigTab('foods', this)">🍎 Foods</div>
@@ -467,8 +472,10 @@
 <!-- ══ MEDS ════════════════════════════════════════════════════════════════ -->
 <div id="pane-meds" class="pane">
 
+  <button class="small blue" id="meds-load-btn" onclick="loadMeds()" style="width:100%;margin-bottom:12px;">Load Meds</button>
+
   <div class="card" id="med-status-card">
-    <div class="empty">Loading…</div>
+    <div class="empty">Tap "Load Meds" above.</div>
   </div>
 
   <!-- Log injection -->
@@ -518,7 +525,7 @@
   <!-- Recent log -->
   <div class="card">
     <label>Recent History</label>
-    <ul class="entry-list" id="med-log-list"><div class="empty">Loading…</div></ul>
+    <ul class="entry-list" id="med-log-list"><div class="empty">Tap "Load Meds" above.</div></ul>
   </div>
 
 </div>
@@ -530,11 +537,12 @@
     <label>Session Date</label>
     <div id="workout-day-display" style="font-size:20px;font-weight:600;color:#1c1c1e;margin-bottom:8px;"></div>
     <input type="date" id="workout-date" onchange="updateWorkoutDayDisplay()">
+    <button class="small blue" id="workout-load-btn" onclick="loadWorkout()" style="width:100%;margin-top:8px;">Load Workout</button>
   </div>
 
   <!-- Exercise checklist — rendered by renderWorkoutMenu(). Each pick saves
        immediately (updateWorkoutField); there's no separate submit step. -->
-  <div id="workout-menu"></div>
+  <div id="workout-menu"><div class="card"><div class="empty">Tap "Load Workout" above.</div></div></div>
 
   <div class="card">
     <label>Notes (optional)</label>
@@ -545,7 +553,7 @@
 
   <div class="card" style="margin-top:16px;">
     <div class="section-title">Recent Sessions</div>
-    <div id="workout-history"><div class="empty">Loading…</div></div>
+    <div id="workout-history"><div class="empty">Tap "Load Workout" above.</div></div>
   </div>
 
 </div>
@@ -586,9 +594,11 @@
 
   <button class="primary" onclick="doLogInbox()">Log Session</button>
 
-  <div class="card" style="margin-top:16px;">
+  <button class="small blue" id="inbox-load-btn" onclick="loadInbox()" style="width:100%;margin-top:16px;">Load Recent Sessions</button>
+
+  <div class="card" style="margin-top:12px;">
     <div class="section-title">Recent Sessions</div>
-    <div id="inbox-history"><div class="empty">Loading…</div></div>
+    <div id="inbox-history"><div class="empty">Tap "Load Recent Sessions" above.</div></div>
   </div>
 
 </div>
@@ -632,17 +642,10 @@ function showTab(name, el) {
   document.querySelectorAll('#main-tabs .tab').forEach(t => t.classList.remove('active'));
   document.getElementById('pane-' + name).classList.add('active');
   el.classList.add('active');
-  if (name === 'history') {
-    if (!S.histData) loadHistory();
-    else renderHistTab(S.histTab);
-  }
-  if (name === 'configure') {
-    renderConfig();
-    if (!S.foods.length && !S.activities.length) loadConfigData();
-  }
-  if (name === 'meds')    loadMeds();
-  if (name === 'workout') loadWorkout();
-  if (name === 'inbox')   loadInbox();
+  // Data is loaded on demand via each pane's Load/Refresh button, not on
+  // tab switch — cached data (if already fetched this session) just renders.
+  if (name === 'history')   renderHistTab(S.histTab);
+  if (name === 'configure') renderConfig();
 }
 
 function showConfigTab(name, el) {
@@ -723,7 +726,6 @@ function showHistTab(name, el) {
   );
   el.classList.add('active');
   S.histTab = name;
-  if (!S.histData) { loadHistory(); return; }
   renderHistTab(name);
 }
 
@@ -741,14 +743,47 @@ function toast(msg) {
   clearTimeout(_tt); _tt = setTimeout(() => el.classList.remove('show'), 2200);
 }
 
+// ── Load/Refresh buttons ──────────────────────────────────────────────────────
+// Every pane fetches its data on demand (button press) rather than
+// automatically on page open or tab switch -- background auto-loads were the
+// suspected cause of intermittent phone-browser freezes (see todo.txt).
+function _btnBusy(id) {
+  const b = document.getElementById(id);
+  if (!b) return null;
+  if (!b.dataset.label) b.dataset.label = b.textContent;
+  b.disabled = true; b.textContent = 'Loading…';
+  return b;
+}
+function _btnDone(b) {
+  if (!b) return;
+  b.disabled = false; b.textContent = b.dataset.label;
+}
+
+function _dayText(date) {
+  return new Date(date + 'T12:00:00').toLocaleDateString('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric'
+  });
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
+// Sets up default dates/labels only -- no google.script.run calls. Each pane
+// stays empty (with a "Tap Load" hint) until its Load button is pressed.
 window.addEventListener('load', () => {
   document.getElementById('log-date').value = TODAY;
   updateDayDisplay(TODAY);
-  loadLogDate(TODAY);
+  renderWeight(); renderFood(); renderActivities();
+
+  const wDate = document.getElementById('workout-date');
+  if (wDate) wDate.value = TODAY;
+  const wEl = document.getElementById('workout-day-display');
+  if (wEl) wEl.textContent = _dayText(TODAY);
+
+  const iDate = document.getElementById('inbox-date');
+  if (iDate) { iDate.value = TODAY; updateInboxDayDisplay(); }
 });
 
 function loadLogDate(date) {
+  const btn = _btnBusy('log-load-btn');
   google.script.run
     .withSuccessHandler(d => {
       S.foods      = d.foods_config      || [];
@@ -766,11 +801,14 @@ function loadLogDate(date) {
         if (lnk) { lnk.href = d.sheet_url; lnk.style.display = 'inline'; }
       }
       renderWeight(); renderFood(); renderActivities();
+      _btnDone(btn);
     })
-    .withFailureHandler(err => toast('Load error: ' + err.message))
+    .withFailureHandler(err => { toast('Load error: ' + err.message); _btnDone(btn); })
     .getDateSummary(date);
 }
 
+// Changing the date is itself a deliberate action, so it fetches that day's
+// data automatically -- only the initial app-open load is button-gated.
 function changeLogDate() {
   const d = document.getElementById('log-date').value;
   if (!d) return;
@@ -780,20 +818,23 @@ function changeLogDate() {
 }
 
 function loadConfigData() {
+  const btn = _btnBusy('config-load-btn');
   google.script.run
     .withSuccessHandler(d => {
       S.foods      = d.foods_config      || [];
       S.activities = d.activities_config || [];
       renderConfig();
+      _btnDone(btn);
     })
-    .withFailureHandler(e => toast('Load error: ' + e.message))
+    .withFailureHandler(e => { toast('Load error: ' + e.message); _btnDone(btn); })
     .getDateSummary(S.logDate);
 }
 
 function loadHistory() {
+  const btn = _btnBusy('history-load-btn');
   google.script.run
-    .withSuccessHandler(data => { S.histData = data; S.goal = data.goal || S.goal; renderHistTab(S.histTab); })
-    .withFailureHandler(e => toast('History error: ' + e.message))
+    .withSuccessHandler(data => { S.histData = data; S.goal = data.goal || S.goal; renderHistTab(S.histTab); _btnDone(btn); })
+    .withFailureHandler(e => { toast('History error: ' + e.message); _btnDone(btn); })
     .getHistoryPage(90);
 }
 
@@ -1072,7 +1113,7 @@ function renderHistWeight() {
 }
 
 function drawWeightSvg() {
-  if (!S.histData) return '<div class="empty">Loading…</div>';
+  if (!S.histData) return '<div class="empty">Tap "Load History" above.</div>';
   const daysVal = document.getElementById('wt-days').value;
   const manMin  = parseFloat(document.getElementById('wt-ymin').value);
   const manMax  = parseFloat(document.getElementById('wt-ymax').value);
@@ -1268,7 +1309,7 @@ function drawCalStats() {
 }
 
 function drawCalSvg() {
-  if (!S.histData) return '<div class="empty">Loading…</div>';
+  if (!S.histData) return '<div class="empty">Tap "Load History" above.</div>';
   const foodData = S.histData.food || {};
   // Prefer BMR-computed target at today's weight; fall back to manual goal
   const goal     = S.cal_target || S.histData.goal || S.goal || 0;
@@ -1370,7 +1411,7 @@ function drawCalSvg() {
 
 function renderHistActivities() {
   if (!S.histData) {
-    document.getElementById('hist-acts-content').innerHTML = '<div class="card"><div class="empty">Loading…</div></div>';
+    document.getElementById('hist-acts-content').innerHTML = '<div class="card"><div class="empty">Tap "Load History" above.</div></div>';
     return;
   }
   const actData  = S.histData.activities       || {};
@@ -1660,10 +1701,11 @@ function loadMeds() {
     const el = document.getElementById(id);
     if (el && !el.value) el.value = today;
   });
+  const btn = _btnBusy('meds-load-btn');
   document.getElementById('med-status-card').innerHTML = '<div class="empty">Loading…</div>';
   google.script.run
-    .withSuccessHandler(st => { _medStatus = st; renderMedStatus(st); })
-    .withFailureHandler(e => toast('Meds error: ' + e.message))
+    .withSuccessHandler(st => { _medStatus = st; renderMedStatus(st); _btnDone(btn); })
+    .withFailureHandler(e => { toast('Meds error: ' + e.message); _btnDone(btn); })
     .getMedStatus();
   google.script.run
     .withSuccessHandler(entries => renderMedHistory(entries))
@@ -1895,10 +1937,11 @@ function _parseWoValue(saved) {
 function loadWorkout() {
   const dateEl = document.getElementById('workout-date');
   if (dateEl && !dateEl.value) { dateEl.value = TODAY; }
+  const btn = _btnBusy('workout-load-btn');
   updateWorkoutDayDisplay();
   google.script.run
-    .withSuccessHandler(entries => renderWorkoutHistory(entries))
-    .withFailureHandler(e => toast('Workout error: ' + e.message))
+    .withSuccessHandler(entries => { renderWorkoutHistory(entries); _btnDone(btn); })
+    .withFailureHandler(e => { toast('Workout error: ' + e.message); _btnDone(btn); })
     .getWorkoutLog(30);
 }
 
@@ -2058,10 +2101,12 @@ function updateInboxDayDisplay() {
 function loadInbox() {
   const dateEl = document.getElementById('inbox-date');
   if (!dateEl.value) { dateEl.value = TODAY; updateInboxDayDisplay(); }
+  const btn = _btnBusy('inbox-load-btn');
   google.script.run
-    .withSuccessHandler(function(entries) { renderInboxHistory(entries); })
+    .withSuccessHandler(function(entries) { renderInboxHistory(entries); _btnDone(btn); })
     .withFailureHandler(function(e) {
       document.getElementById('inbox-history').innerHTML = '<div class="empty" style="color:#c00;">' + e.message + '</div>';
+      _btnDone(btn);
     })
     .getInboxLog(60);
 }
