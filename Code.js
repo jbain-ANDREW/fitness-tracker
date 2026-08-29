@@ -48,8 +48,14 @@ const SCHEMA_TYPES = {
 };
 
 // Date display formats — applied to 'date' and 'datetime' columns in all sheets.
-const DATE_FORMAT     = 'ddd, MM/dd/yyyy';
-const DATETIME_FORMAT = 'ddd, MM/dd/yyyy HH:mm';
+// Single source of truth for sheet cell formatting: change here, then use the
+// Config tab's "Fix Formatting" button to reapply everywhere (or "Check Now"
+// to see which sheets are out of date first).
+// The semicolon between date and time is a reserved section-separator
+// character in Sheets/Excel custom number formats, so it's wrapped in quotes
+// to force it to render as a literal character instead.
+const DATE_FORMAT     = 'ddd, MM-dd-yyyy';
+const DATETIME_FORMAT = 'ddd, MM-dd-yyyy"; "hh:mm:ss AM/PM';
 
 function _mkCols(arr) {
   return arr.reduce(function(o, k, i) { o[k] = i; return o; }, {});
@@ -802,16 +808,6 @@ function auditAndFixSheets() {
     // every row, not inferred from text-order matching or a 2-row sample.
     log.push('  -- column-by-column header/data alignment for ' + name + ' --');
     scanHeaderDataAlignment(sh, exp, colTypes[name]).forEach(function (line) { log.push(line); });
-  });
-
-  // 3. Show day-of-week alongside date for food and exercise logging, so
-  //    manually scanning/editing rows is easier. Cosmetic only -- the
-  //    underlying Date values and all read/write logic are unaffected.
-  [FOOD_LOG_SHEET, ACT_LOG_SHEET].forEach(function (name) {
-    const sh = ss.getSheetByName(name);
-    if (!sh) return;
-    sh.getRange('B2:B').setNumberFormat('ddd yyyy-mm-dd');
-    log.push(name + ": date column (B) formatted as 'ddd yyyy-mm-dd' (e.g. 'Tue 2026-06-27').");
   });
 
   const report = log.join('\n');
