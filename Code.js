@@ -86,10 +86,13 @@ const SCHEMA_MAP = [
 ];
 
 function doGet() {
+  // Viewport meta tag lives in index.html's <head> -- do NOT also add one
+  // here via .addMetaTag(). Doing both used to ship two <meta viewport>
+  // tags in the served page, which is what index.html's tag needs to be
+  // the sole, authoritative one (see CHROME_S26_DEBUG_HANDOFF.md).
   return HtmlService.createTemplateFromFile('index')
     .evaluate()
     .setTitle('Fitness Tracker')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 

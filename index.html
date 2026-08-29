@@ -2,7 +2,14 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- interactive-widget=resizes-content: forces Chrome/Android to resize the
+       layout viewport (not just the visual viewport) when the URL bar or
+       on-screen keyboard shows/hides. Without it, Chrome's default
+       (resizes-visual) has a known class of bugs where hit-testing/scroll
+       state doesn't recompute after a visual-viewport-only resize, leaving
+       taps/scroll dead until something forces a relayout (e.g. rotating the
+       screen). See docs/CHROME_S26_DEBUG_HANDOFF.md. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
   <title>Fitness Tracker</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -608,6 +615,58 @@
 <script>
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function _attr(s) { return JSON.stringify(s).replace(/"/g, '&quot;'); }
+
+// ── Chrome/S26 freeze diagnostics ───────────────────────────────────────────
+// Global on purpose -- not wired to any UI button. If the app locks up
+// (taps/scroll dead), connect the phone via USB, open chrome://inspect on a
+// desktop Chrome, open this page's remote DevTools console, and call these
+// while it's frozen (before rotating the screen to "fix" it) to capture what
+// Chrome's compositor actually thinks is happening. See
+// docs/CHROME_S26_DEBUG_HANDOFF.md for the full investigation writeup.
+function debugHitTest() {
+  const points = [
+    [window.innerWidth / 2, window.innerHeight / 2],
+    [20, 20],
+    [window.innerWidth - 20, 20],
+    [20, window.innerHeight - 20],
+    [window.innerWidth - 20, window.innerHeight - 20]
+  ];
+  return points.map(([x, y]) => {
+    const el = document.elementFromPoint(x, y);
+    return { x, y, tag: el?.tagName, id: el?.id, className: el?.className };
+  });
+}
+
+function debugFixedElements() {
+  return [...document.querySelectorAll('*')]
+    .filter(el => {
+      const s = getComputedStyle(el);
+      const r = el.getBoundingClientRect();
+      return s.position === 'fixed' && s.display !== 'none' && s.visibility !== 'hidden' && r.width > 0 && r.height > 0;
+    })
+    .map(el => ({
+      tag: el.tagName, id: el.id, className: el.className,
+      zIndex: getComputedStyle(el).zIndex, rect: el.getBoundingClientRect().toJSON()
+    }));
+}
+
+function debugViewport() {
+  return {
+    innerWidth: window.innerWidth,
+    innerHeight: window.innerHeight,
+    clientWidth: document.documentElement.clientWidth,
+    clientHeight: document.documentElement.clientHeight,
+    scrollX: window.scrollX,
+    scrollY: window.scrollY,
+    bodyOverflow: getComputedStyle(document.body).overflow,
+    htmlOverflow: getComputedStyle(document.documentElement).overflow,
+    visualViewport: window.visualViewport ? {
+      width: window.visualViewport.width, height: window.visualViewport.height,
+      offsetLeft: window.visualViewport.offsetLeft, offsetTop: window.visualViewport.offsetTop,
+      scale: window.visualViewport.scale
+    } : null
+  };
+}
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
