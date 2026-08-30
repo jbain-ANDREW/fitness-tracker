@@ -187,7 +187,7 @@
     <label>Logging for</label>
     <div id="log-day-display" style="font-size:20px;font-weight:600;color:#1c1c1e;margin-bottom:8px;"></div>
     <input type="date" id="log-date" onchange="changeLogDate()">
-    <button class="small blue" id="log-load-btn" onclick="loadLogDate(S.logDate)" style="width:100%;margin-top:8px;">Load Data</button>
+    <button class="small blue" id="log-load-btn" onclick="loadLogDate(S.logDate)" style="width:100%;margin-top:8px;">Refresh Data</button>
   </div>
 
   <!-- Weight -->
@@ -268,7 +268,7 @@
 <!-- ══ HISTORY ══════════════════════════════════════════════════════════════ -->
 <div id="pane-history" class="pane">
 
-  <button class="small blue" id="history-load-btn" onclick="loadHistory()" style="width:100%;margin-bottom:12px;">Load History</button>
+  <button class="small blue" id="history-load-btn" onclick="loadHistory()" style="width:100%;margin-bottom:12px;">Refresh History</button>
 
   <div class="tabs" id="hist-tabs" style="margin-bottom:16px;">
     <div class="tab active" onclick="showHistTab('weight', this)">⚖️ Weight</div>
@@ -292,7 +292,7 @@
         <div class="col"><label>Y min (lbs)</label><input type="number" id="wt-ymin" placeholder="auto" step="0.5" oninput="renderHistWeight()"></div>
         <div class="col"><label>Y max (lbs)</label><input type="number" id="wt-ymax" placeholder="auto" step="0.5" oninput="renderHistWeight()"></div>
       </div>
-      <div id="wt-chart-wrap"><div class="empty">Tap "Load History" above.</div></div>
+      <div id="wt-chart-wrap"><div class="empty">Loading…</div></div>
     </div>
   </div>
 
@@ -300,13 +300,13 @@
   <div id="hist-calories" style="display:none;">
     <div class="card">
       <div style="font-size:13px;color:#6e6e73;margin-bottom:12px;">Last 7 days + today · <span style="color:#ff9500;">■</span> food &nbsp;·&nbsp; <span style="color:#34c759;">■</span> net (under goal) &nbsp;·&nbsp; <span style="color:#ff3b30;">■</span> net (over goal) &nbsp;·&nbsp; <span style="color:#ff9500;opacity:0.45;">■</span> today (in progress)</div>
-      <div id="cal-chart-wrap"><div class="empty">Tap "Load History" above.</div></div>
+      <div id="cal-chart-wrap"><div class="empty">Loading…</div></div>
     </div>
   </div>
 
   <!-- Activities sub-pane -->
   <div id="hist-activities" style="display:none;">
-    <div id="hist-acts-content"><div class="card"><div class="empty">Tap "Load History" above.</div></div></div>
+    <div id="hist-acts-content"><div class="card"><div class="empty">Loading…</div></div></div>
   </div>
 
 </div>
@@ -314,7 +314,7 @@
 <!-- ══ CONFIGURE ════════════════════════════════════════════════════════════ -->
 <div id="pane-configure" class="pane">
 
-  <button class="small blue" id="config-load-btn" onclick="loadConfigData()" style="width:100%;margin-bottom:12px;">Load Foods / Activities</button>
+  <button class="small blue" id="config-load-btn" onclick="loadConfigData()" style="width:100%;margin-bottom:12px;">Refresh Foods / Activities</button>
 
   <div class="tabs" id="cfg-tabs" style="margin-bottom:16px;">
     <div class="tab active" onclick="showConfigTab('foods', this)">🍎 Foods</div>
@@ -472,10 +472,10 @@
 <!-- ══ MEDS ════════════════════════════════════════════════════════════════ -->
 <div id="pane-meds" class="pane">
 
-  <button class="small blue" id="meds-load-btn" onclick="loadMeds()" style="width:100%;margin-bottom:12px;">Load Meds</button>
+  <button class="small blue" id="meds-load-btn" onclick="loadMeds()" style="width:100%;margin-bottom:12px;">Refresh Meds</button>
 
   <div class="card" id="med-status-card">
-    <div class="empty">Tap "Load Meds" above.</div>
+    <div class="empty">Loading…</div>
   </div>
 
   <!-- Log injection -->
@@ -525,7 +525,7 @@
   <!-- Recent log -->
   <div class="card">
     <label>Recent History</label>
-    <ul class="entry-list" id="med-log-list"><div class="empty">Tap "Load Meds" above.</div></ul>
+    <ul class="entry-list" id="med-log-list"><div class="empty">Loading…</div></ul>
   </div>
 
 </div>
@@ -537,12 +537,12 @@
     <label>Session Date</label>
     <div id="workout-day-display" style="font-size:20px;font-weight:600;color:#1c1c1e;margin-bottom:8px;"></div>
     <input type="date" id="workout-date" onchange="updateWorkoutDayDisplay()">
-    <button class="small blue" id="workout-load-btn" onclick="loadWorkout()" style="width:100%;margin-top:8px;">Load Workout</button>
+    <button class="small blue" id="workout-load-btn" onclick="loadWorkout()" style="width:100%;margin-top:8px;">Refresh Workout</button>
   </div>
 
   <!-- Exercise checklist — rendered by renderWorkoutMenu(). Each pick saves
        immediately (updateWorkoutField); there's no separate submit step. -->
-  <div id="workout-menu"><div class="card"><div class="empty">Tap "Load Workout" above.</div></div></div>
+  <div id="workout-menu"><div class="card"><div class="empty">Loading…</div></div></div>
 
   <div class="card">
     <label>Notes (optional)</label>
@@ -553,7 +553,7 @@
 
   <div class="card" style="margin-top:16px;">
     <div class="section-title">Recent Sessions</div>
-    <div id="workout-history"><div class="empty">Tap "Load Workout" above.</div></div>
+    <div id="workout-history"><div class="empty">Loading…</div></div>
   </div>
 
 </div>
@@ -594,11 +594,11 @@
 
   <button class="primary" onclick="doLogInbox()">Log Session</button>
 
-  <button class="small blue" id="inbox-load-btn" onclick="loadInbox()" style="width:100%;margin-top:16px;">Load Recent Sessions</button>
+  <button class="small blue" id="inbox-load-btn" onclick="loadInbox()" style="width:100%;margin-top:16px;">Refresh Recent Sessions</button>
 
   <div class="card" style="margin-top:12px;">
     <div class="section-title">Recent Sessions</div>
-    <div id="inbox-history"><div class="empty">Tap "Load Recent Sessions" above.</div></div>
+    <div id="inbox-history"><div class="empty">Loading…</div></div>
   </div>
 
 </div>
@@ -672,6 +672,12 @@ const S = {
   logDate:    TODAY,
   histData:   null,
   histTab:    'weight',
+  // Tracks which panes have auto-loaded this session -- each one fetches
+  // once (Log on page open, the rest on first visit to their tab) and is
+  // then rendered from this cached state on every later visit, with no
+  // repeat network call. The "Refresh" button on each pane bypasses this
+  // and force-refetches.
+  loaded: { log: false, history: false, configure: false, meds: false, workout: false, inbox: false },
   goal:       0,
   sheet_url:  '',
   bmr:        {},
@@ -694,10 +700,21 @@ function showTab(name, el) {
   document.querySelectorAll('#main-tabs .tab').forEach(t => t.classList.remove('active'));
   document.getElementById('pane-' + name).classList.add('active');
   el.classList.add('active');
-  // Data is loaded on demand via each pane's Load/Refresh button, not on
-  // tab switch — cached data (if already fetched this session) just renders.
-  if (name === 'history')   renderHistTab(S.histTab);
-  if (name === 'configure') renderConfig();
+  // First visit to a tab this session auto-fetches its data (see S.loaded
+  // comment above). Later visits just re-render whatever's cached/already
+  // in the DOM -- no repeat network call. (Log tab is the exception: it
+  // auto-loads on page open instead, since it's the default active pane.)
+  if (!S.loaded[name]) {
+    S.loaded[name] = true;
+    if (name === 'history')   loadHistory();
+    if (name === 'configure') loadConfigData();
+    if (name === 'meds')      loadMeds();
+    if (name === 'workout')   loadWorkout();
+    if (name === 'inbox')     loadInbox();
+  } else {
+    if (name === 'history')   renderHistTab(S.histTab);
+    if (name === 'configure') renderConfig();
+  }
 }
 
 function showConfigTab(name, el) {
@@ -796,9 +813,15 @@ function toast(msg) {
 }
 
 // ── Load/Refresh buttons ──────────────────────────────────────────────────────
-// Every pane fetches its data on demand (button press) rather than
-// automatically on page open or tab switch -- background auto-loads were the
-// suspected cause of intermittent phone-browser freezes (see todo.txt).
+// Each pane auto-loads once per session (Log on page open, the rest on
+// first tab visit -- see S.loaded and showTab()), then is cached and
+// re-rendered from that on later visits with no repeat network call. These
+// buttons are the manual "Refresh" override for any pane. (A prior version
+// of this app removed all automatic loading entirely, on suspicion it was
+// causing intermittent phone-browser freezes -- see todo.txt. That was
+// unconfirmed, and the freeze investigation since then found unrelated
+// causes -- see docs/CHROME_S26_DEBUG_HANDOFF.md -- so this reintroduces
+// auto-load with per-session caching to keep round-trips low.)
 function _btnBusy(id) {
   const b = document.getElementById(id);
   if (!b) return null;
@@ -832,6 +855,11 @@ window.addEventListener('load', () => {
 
   const iDate = document.getElementById('inbox-date');
   if (iDate) { iDate.value = TODAY; updateInboxDayDisplay(); }
+
+  // Log is the default active pane, so it auto-loads here rather than via
+  // showTab()'s first-visit check (every other pane auto-loads there).
+  S.loaded.log = true;
+  loadLogDate(TODAY);
 });
 
 function loadLogDate(date) {
@@ -1165,7 +1193,7 @@ function renderHistWeight() {
 }
 
 function drawWeightSvg() {
-  if (!S.histData) return '<div class="empty">Tap "Load History" above.</div>';
+  if (!S.histData) return '<div class="empty">Loading…</div>';
   const daysVal = document.getElementById('wt-days').value;
   const manMin  = parseFloat(document.getElementById('wt-ymin').value);
   const manMax  = parseFloat(document.getElementById('wt-ymax').value);
@@ -1361,7 +1389,7 @@ function drawCalStats() {
 }
 
 function drawCalSvg() {
-  if (!S.histData) return '<div class="empty">Tap "Load History" above.</div>';
+  if (!S.histData) return '<div class="empty">Loading…</div>';
   const foodData = S.histData.food || {};
   // Prefer BMR-computed target at today's weight; fall back to manual goal
   const goal     = S.cal_target || S.histData.goal || S.goal || 0;
@@ -1463,7 +1491,7 @@ function drawCalSvg() {
 
 function renderHistActivities() {
   if (!S.histData) {
-    document.getElementById('hist-acts-content').innerHTML = '<div class="card"><div class="empty">Tap "Load History" above.</div></div>';
+    document.getElementById('hist-acts-content').innerHTML = '<div class="card"><div class="empty">Loading…</div></div>';
     return;
   }
   const actData  = S.histData.activities       || {};
