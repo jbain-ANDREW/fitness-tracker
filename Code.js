@@ -86,13 +86,18 @@ const SCHEMA_MAP = [
 ];
 
 function doGet() {
-  // Viewport meta tag lives in index.html's <head> -- do NOT also add one
-  // here via .addMetaTag(). Doing both used to ship two <meta viewport>
-  // tags in the served page, which is what index.html's tag needs to be
-  // the sole, authoritative one (see CHROME_S26_DEBUG_HANDOFF.md).
+  // This .addMetaTag('viewport', ...) is NOT redundant with index.html's own
+  // <meta viewport> tag, despite looking like a duplicate -- Apps Script web
+  // apps serve content through an outer wrapper page (hosting a sandboxed
+  // googleusercontent.com iframe) plus the inner iframe document itself.
+  // .addMetaTag() sets the OUTER wrapper's viewport; index.html's own tag
+  // sets the INNER iframe's. Removing this on 2026-08-29 made the app render
+  // too small on phone Chrome (outer wrapper fell back to a fixed desktop-
+  // width default) -- restored. See docs/CHROME_S26_DEBUG_HANDOFF.md.
   return HtmlService.createTemplateFromFile('index')
     .evaluate()
     .setTitle('Fitness Tracker')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
