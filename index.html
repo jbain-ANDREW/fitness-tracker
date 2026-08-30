@@ -299,7 +299,12 @@
   <!-- Calories sub-pane -->
   <div id="hist-calories" style="display:none;">
     <div class="card">
-      <div style="font-size:13px;color:#6e6e73;margin-bottom:12px;">Last 7 days + today · <span style="color:#ff9500;">■</span> food &nbsp;·&nbsp; <span style="color:#34c759;">■</span> net (under goal) &nbsp;·&nbsp; <span style="color:#ff3b30;">■</span> net (over goal) &nbsp;·&nbsp; <span style="color:#ff9500;opacity:0.45;">■</span> today (in progress)</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <button class="small grey" onclick="calWeekNav(1)" style="flex:0 0 auto;padding:6px 12px;">◀ Prev</button>
+        <div id="cal-week-label" style="flex:1;text-align:center;font-size:13px;font-weight:600;color:#1c1c1e;"></div>
+        <button class="small grey" id="cal-week-next-btn" onclick="calWeekNav(-1)" style="flex:0 0 auto;padding:6px 12px;">Next ▶</button>
+      </div>
+      <div style="font-size:13px;color:#6e6e73;margin-bottom:12px;"><span style="color:#ff9500;">■</span> food &nbsp;·&nbsp; <span style="color:#34c759;">■</span> net (under goal) &nbsp;·&nbsp; <span style="color:#ff3b30;">■</span> net (over goal) &nbsp;·&nbsp; <span style="color:#ff9500;opacity:0.45;">■</span> today (in progress)</div>
       <div id="cal-chart-wrap"><div class="empty">Loading…</div></div>
     </div>
   </div>
@@ -672,6 +677,7 @@ const S = {
   logDate:    TODAY,
   histData:   null,
   histTab:    'weight',
+  calWeekOffset: 0, // 0 = this week (7 days + today); 1+ = that many weeks further back
   // Tracks which panes have auto-loaded this session -- each one fetches
   // once (Log on page open, the rest on first visit to their tab) and is
   // then rendered from this cached state on every later visit, with no
@@ -928,7 +934,7 @@ function loadHistory() {
   google.script.run
     .withSuccessHandler(data => { S.histData = data; S.goal = data.goal || S.goal; renderHistTab(S.histTab); _btnDone(btn); })
     .withFailureHandler(e => { toast('History error: ' + e.message); _btnDone(btn); })
-    .getHistoryPage(90);
+    .getHistoryPage(370); // ~52 weeks -- gives the calorie viewer's Prev/Next week nav a full year to page through
 }
 
 // ── Weight ────────────────────────────────────────────────────────────────────
@@ -1280,7 +1286,29 @@ function drawWeightSvg() {
 }
 
 function renderHistCalories() {
-  document.getElementById('cal-chart-wrap').innerHTML = drawCalSvg() + drawCalStats();
+  document.getElementById('cal-chart-wrap').innerHTML = drawCalSvg(S.calWeekOffset) + drawCalStats();
+  updateCalWeekLabel();
+}
+
+// Prev/Next week navigation for the calorie bar chart. delta is +1 (older)
+// from the Prev button or -1 (newer) from Next; offset is clamped at 0 so
+// Next can't go past the current week.
+function calWeekNav(delta) {
+  S.calWeekOffset = Math.max(0, S.calWeekOffset + delta);
+  renderHistCalories();
+}
+
+function updateCalWeekLabel() {
+  const el = document.getElementById('cal-week-label');
+  const nextBtn = document.getElementById('cal-week-next-btn');
+  if (!el) return;
+  const offset = S.calWeekOffset;
+  if (nextBtn) nextBtn.disabled = offset === 0;
+  if (offset === 0) { el.textContent = 'This week'; return; }
+  const fmt = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const endD = new Date(TODAY + 'T12:00:00');   endD.setDate(endD.getDate() - (offset * 7));
+  const startD = new Date(TODAY + 'T12:00:00'); startD.setDate(startD.getDate() - (offset * 7 + 6));
+  el.textContent = `${fmt(startD)} – ${fmt(endD)}`;
 }
 
 // Restored from Apps Script version 40 -- this and its Code.js counterparts
@@ -1403,7 +1431,8 @@ function drawCalStats() {
     </div>`;
 }
 
-function drawCalSvg() {
+function drawCalSvg(offset) {
+  offset = offset || 0;
   if (!S.histData) return '<div class="empty">Loading…</div>';
   const foodData = S.histData.food || {};
   // Prefer BMR-computed target at today's weight; fall back to manual goal
@@ -1415,8 +1444,11 @@ function drawCalSvg() {
     if (p.net_calories !== null && p.net_calories !== undefined) wtNetMap[p.date] = p.net_calories;
   });
 
+  // offset 0: the 7 days before today, oldest first, plus today itself as
+  // an 8th in-progress bar. offset N>0: a plain 7-day block N weeks further
+  // back (no "today" bar -- every day in a past week is already complete).
   const days = [];
-  for (let i = 7; i >= 1; i--) {
+  for (let i = offset * 7 + 7; i >= offset * 7 + 1; i--) {
     const d  = new Date(TODAY + 'T12:00:00');
     d.setDate(d.getDate() - i);
     const ds   = d.toISOString().slice(0, 10);
@@ -1424,15 +1456,23 @@ function drawCalSvg() {
     const net  = wtNetMap[ds] !== undefined ? Math.max(wtNetMap[ds], 0) : 0;  // green/red bar: pre-computed net
     days.push({ date: ds, food, net, isToday: false });
   }
-  // Today: food only (in progress), excluded from trend calcs
-  days.push({ date: TODAY, food: (foodData[TODAY] || {}).total_calories || 0, net: 0, isToday: true });
+  if (offset === 0) {
+    // Today: food only (in progress), excluded from trend calcs
+    days.push({ date: TODAY, food: (foodData[TODAY] || {}).total_calories || 0, net: 0, isToday: true });
+  }
 
-  if (days.slice(0, 7).every(d => d.food === 0 && d.net === 0)) return '<div class="empty">No calorie data for the last 7 days.</div>';
+  // slice(0, 7) deliberately excludes today's partial entry at offset 0 --
+  // today having a couple items logged shouldn't mask "no real data this
+  // week" if the 7 complete days are all empty. For offset > 0, days is
+  // already exactly 7 long (no today bar), so the slice is a no-op there.
+  if (days.slice(0, 7).every(d => d.food === 0 && d.net === 0)) {
+    return `<div class="empty">No calorie data for ${offset === 0 ? 'the last 7 days' : 'this week'}.</div>`;
+  }
 
   const W = 440, H = 200, ML = 50, MR = 10, MT = 26, MB = 40;
   const PW = W - ML - MR, PH = H - MT - MB;
   const maxCal = 3000;
-  const slotW   = PW / 8;
+  const slotW   = PW / days.length;
   const dayPad   = slotW * 0.10;
   const foodW    = slotW * 0.26;
   const intraGap = slotW * 0.05;
