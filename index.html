@@ -813,15 +813,20 @@ function toast(msg) {
 }
 
 // ── Load/Refresh buttons ──────────────────────────────────────────────────────
-// Each pane auto-loads once per session (Log on page open, the rest on
-// first tab visit -- see S.loaded and showTab()), then is cached and
-// re-rendered from that on later visits with no repeat network call. These
-// buttons are the manual "Refresh" override for any pane. (A prior version
-// of this app removed all automatic loading entirely, on suspicion it was
-// causing intermittent phone-browser freezes -- see todo.txt. That was
-// unconfirmed, and the freeze investigation since then found unrelated
-// causes -- see docs/CHROME_S26_DEBUG_HANDOFF.md -- so this reintroduces
-// auto-load with per-session caching to keep round-trips low.)
+// Each pane auto-loads once per session, then is cached and re-rendered from
+// that on later visits with no repeat network call. Log and History both
+// load on page open (a unit -- the usual workflow is log something, then
+// check history), and History also re-loads after every Log-tab write
+// (see applyWeightResult/logFood/deleteFoodEntry/logActivity/
+// deleteActivityEntry) so it stays current without waiting for its own tab
+// to be revisited. The rest (Config/Meds/Workout/Inbox) load on first visit
+// to that tab -- see S.loaded and showTab(). These buttons are the manual
+// "Refresh" override for any pane. (A prior version of this app removed all
+// automatic loading entirely, on suspicion it was causing intermittent
+// phone-browser freezes -- see todo.txt. That was unconfirmed, and the
+// freeze investigation since then found unrelated causes -- see
+// docs/CHROME_S26_DEBUG_HANDOFF.md -- so this reintroduces auto-load with
+// per-session caching to keep round-trips low.)
 function _btnBusy(id) {
   const b = document.getElementById(id);
   if (!b) return null;
@@ -841,8 +846,6 @@ function _dayText(date) {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-// Sets up default dates/labels only -- no google.script.run calls. Each pane
-// stays empty (with a "Tap Load" hint) until its Load button is pressed.
 window.addEventListener('load', () => {
   document.getElementById('log-date').value = TODAY;
   updateDayDisplay(TODAY);
@@ -860,6 +863,16 @@ window.addEventListener('load', () => {
   // showTab()'s first-visit check (every other pane auto-loads there).
   S.loaded.log = true;
   loadLogDate(TODAY);
+
+  // History loads here too, not lazily on first tab visit -- Log and
+  // History are used as a unit (log something, then immediately check the
+  // updated history/charts), so History needs to already be ready by the
+  // time that tab is opened, not fetched fresh at that point. See also
+  // each Log-tab write handler below, which re-calls loadHistory() after a
+  // successful write so History stays current without waiting for its own
+  // tab to be revisited.
+  S.loaded.history = true;
+  loadHistory();
 });
 
 function loadLogDate(date) {
@@ -934,6 +947,7 @@ function applyWeightResult(d) {
     S.cal_target = S.tdee ? S.tdee - deficit : S.goal;
   }
   renderWeight(); renderCalTotals();
+  loadHistory(); // Log + History act as a unit -- keep History current after every write.
 }
 
 function logWeight() {
@@ -1073,14 +1087,14 @@ function logFood(meal) {
   const cal = Math.round(parseFloat(sel.options[sel.selectedIndex].dataset.cal) * srv);
   const mealLabel = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner' }[meal] || '';
   google.script.run
-    .withSuccessHandler(d => { S.food = d; renderFoodEntries(); document.getElementById('food-servings').value = '1'; updateCalPreview(); toast(mealLabel ? mealLabel + ' logged ✓' : 'Food logged ✓'); })
+    .withSuccessHandler(d => { S.food = d; renderFoodEntries(); document.getElementById('food-servings').value = '1'; updateCalPreview(); toast(mealLabel ? mealLabel + ' logged ✓' : 'Food logged ✓'); loadHistory(); })
     .withFailureHandler(e => toast('Error: ' + e.message))
     .logFood(sel.value, srv, cal, S.logDate, meal);
 }
 
 function deleteFoodEntry(ts) {
   google.script.run
-    .withSuccessHandler(d => { S.food = d; renderFoodEntries(); toast('Removed'); })
+    .withSuccessHandler(d => { S.food = d; renderFoodEntries(); toast('Removed'); loadHistory(); })
     .withFailureHandler(e => toast('Error: ' + e.message))
     .deleteFoodEntry(ts, S.logDate);
 }
@@ -1175,6 +1189,7 @@ function logActivity() {
       if (ve) { ve.type === 'checkbox' ? (ve.checked = false) : (ve.value = ''); }
       updateActCalPreview();
       toast('Activity logged ✓');
+      loadHistory();
     })
     .withFailureHandler(e => toast('Error: ' + e.message))
     .logActivity(act.name, value, cal, S.logDate);
@@ -1182,7 +1197,7 @@ function logActivity() {
 
 function deleteActivityEntry(ts) {
   google.script.run
-    .withSuccessHandler(d => { S.acts = d; renderActEntries(); toast('Removed'); })
+    .withSuccessHandler(d => { S.acts = d; renderActEntries(); toast('Removed'); loadHistory(); })
     .withFailureHandler(e => toast('Error: ' + e.message))
     .deleteActivityEntry(ts, S.logDate);
 }
